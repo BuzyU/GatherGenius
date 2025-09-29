@@ -5,15 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login - GatherGenius</title>
     <link rel="stylesheet" href="login.css">
-    <!-- Firebase SDK -->
-<script defer src="/__/firebase/12.3.0/firebase-app-compat.js"></script>
-<script defer src="/__/firebase/12.3.0/firebase-auth-compat.js"></script>
-
+    
+    <!-- Firebase SDK from CDN -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 </head>
 <body>
     <div class="container">
         <div class="logo-section">
-            <img src="/src/assets/images/gatherlogo.jpeg" alt="GatherGenius Logo" class="logo">
+            <img src="C:\Users\Umer Zingu\Downloads\GatherGenius\GatherGenius\gatherlogo.jpeg" alt="GatherGenius Logo" class="logo">
         </div>
         <div class="auth-section">
             <h1 id="form-title">Welcome Back</h1>
@@ -70,21 +70,45 @@
                 <button type="submit" class="submit-btn">Sign Up</button>
             </form>
 
-<div class="auth-footer">
-  <p id="toggle-auth-text">
-    <span id="toggle-message">Don't have an account?</span>
-    <a href="#" id="toggle-auth-link">Sign up</a>
-  </p>
-</div>
-
+            <div class="auth-footer">
+                <p id="toggle-auth-text">
+                    <span id="toggle-message">Don't have an account?</span>
+                    <a href="#" id="toggle-auth-link">Sign up</a>
+                </p>
+            </div>
         </div>
     </div>
 
-    <div id="loading-overlay" class="loading-overlay">
-        <div class="spinner"></div>
+    <div id="loading-overlay" class="loading-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; justify-content: center; align-items: center;">
+        <div class="spinner" style="border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite;"></div>
     </div>
 
-    <div id="error-toast" class="toast"></div>
+    <div id="error-toast" class="toast" style="position: fixed; top: 20px; right: 20px; padding: 15px 20px; border-radius: 8px; z-index: 10000; display: none; min-width: 250px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);"></div>
+
+    <style>
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .loading-overlay.active {
+            display: flex !important;
+        }
+        
+        .toast.show {
+            display: block !important;
+        }
+        
+        .toast.error {
+            background-color: #f44336;
+            color: white;
+        }
+        
+        .toast.success {
+            background-color: #4CAF50;
+            color: white;
+        }
+    </style>
 
     <script src="login.js"></script>
 </body>
