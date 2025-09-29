@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Events - GatherGenius</title>
+    <link rel="stylesheet" href="dashboard.css">
+    <link rel="stylesheet" href="events.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <!-- Firebase Scripts -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
+</head>
+<body>
+    <div class="dashboard-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <img src="gatherlogo.jpeg" alt="GatherGenius" class="logo">
+                <button class="menu-toggle">
+                    <i class="fas fa-bars"></i>
+                </button>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="dashboard.html" class="nav-item">
+                    <i class="fas fa-home"></i>
+                    <span>Dashboard</span>
+                </a>
+                <a href="events.html" class="nav-item active">
+                    <i class="fas fa-calendar-alt"></i>
+                    <span>Events</span>
+                </a>
+                <a href="#teams" class="nav-item">
+                    <i class="fas fa-users"></i>
+                    <span>Teams</span>
+                </a>
+                <a href="#analytics" class="nav-item">
+                    <i class="fas fa-chart-bar"></i>
+                    <span>Analytics</span>
+                </a>
+                <a href="#settings" class="nav-item">
+                    <i class="fas fa-cog"></i>
+                    <span>Settings</span>
+                </a>
+            </nav>
+            <button id="logout-btn" class="logout-btn">
+                <i class="fas fa-sign-out-alt"></i>
+                <span>Logout</span>
+            </button>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="content-header">
+                <div class="header-left">
+                    <h1>Events</h1>
+                </div>
+                <div class="header-right">
+                    <div class="search-box">
+                        <input type="text" placeholder="Search events...">
+                        <button class="search-btn">
+                            <i class="fas fa-search"></i>
+                        </button>
+                    </div>
+                    <button class="create-event-btn" onclick="showCreateEventModal()">
+                        <i class="fas fa-plus"></i> Create Event
+                    </button>
+                    <div class="user-menu">
+                        <button class="user-menu-btn">
+                            <img id="user-avatar" src="https://ui-avatars.com/api/?background=0D8ABC&color=fff" alt="User">
+                            <span id="user-name">Guest</span>
+                            <i class="fas fa-chevron-down"></i>
+                        </button>
+                        <div class="user-dropdown">
+                            <a href="#profile" class="dropdown-item">
+                                <i class="fas fa-user"></i>
+                                Profile
+                            </a>
+                            <a href="#settings" class="dropdown-item">
+                                <i class="fas fa-cog"></i>
+                                Settings
+                            </a>
+                            <div class="dropdown-divider"></div>
+                            <a href="#" class="dropdown-item text-danger" id="logout-link">
+                                <i class="fas fa-sign-out-alt"></i>
+                                Logout
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <div class="events-container">
+                <div class="events-header">
+                    <div class="events-filters">
+                        <div class="filter-group">
+                            <label>Filter by Status:</label>
+                            <select id="status-filter">
+                                <option value="all">All Events</option>
+                                <option value="upcoming">Upcoming</option>
+                                <option value="in-progress">In Progress</option>
+                                <option value="completed">Completed</option>
+                            </select>
+                        </div>
+                        <div class="filter-group">
+                            <label>Sort by:</label>
+                            <select id="sort-filter">
+                                <option value="date-asc">Date (Ascending)</option>
+                                <option value="date-desc">Date (Descending)</option>
+                                <option value="name-asc">Name (A-Z)</option>
+                                <option value="name-desc">Name (Z-A)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Events Grid -->
+                <div class="events-grid">
+                    <!-- Events will be dynamically populated here -->
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Create Event Modal -->
+    <div id="createEventModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Create New Event</h2>
+                <button class="close-modal" onclick="closeCreateEventModal()">&times;</button>
+            </div>
+            <form id="createEventForm">
+                <div class="form-group">
+                    <label for="eventName">Event Name</label>
+                    <input type="text" id="eventName" required>
+                </div>
+                <div class="form-group">
+                    <label for="eventDate">Date & Time</label>
+                    <input type="datetime-local" id="eventDate" required>
+                </div>
+                <div class="form-group">
+                    <label for="eventLocation">Location</label>
+                    <input type="text" id="eventLocation" required>
+                </div>
+                <div class="form-group">
+                    <label for="teamSize">Team Size</label>
+                    <input type="number" id="teamSize" min="1" required>
+                </div>
+                <div class="form-group">
+                    <label for="maxTeams">Maximum Teams</label>
+                    <input type="number" id="maxTeams" min="1" required>
+                </div>
+                <div class="form-group">
+                    <label for="eventCost">Cost per Team (₹)</label>
+                    <input type="number" id="eventCost" min="0" required>
+                </div>
+                <div class="form-group">
+                    <label for="eventDescription">Description</label>
+                    <textarea id="eventDescription" rows="4" required></textarea>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-secondary" onclick="closeCreateEventModal()">Cancel</button>
+                    <button type="submit" class="btn-primary">Create Event</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Firebase Scripts -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
+    <script src="events.js"></script>
+    <script src="create-event.js"></script>
+
+    <!-- Error/Success Message Container -->
+    <div id="message-container" class="message-container"></div>
+</body>
+</html>

@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GatherGenius - Dashboard</title>
+    <link rel="stylesheet" href="dashboard.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
+    <!-- Custom JS -->
+    <script src="dashboard.js" defer></script>
+</head>
+<body>
+    <div class="dashboard-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <img src="gatherlogo.jpeg" alt="GatherGenius" class="logo">
+                <button class="menu-toggle">
+                    <i class="fas fa-bars"></i>
+                </button>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="dashboard.html" class="nav-item active">
+                    <i class="fas fa-home"></i>
+                    <span>Dashboard</span>
+                </a>
+                <a href="events.html" class="nav-item">
+                    <i class="fas fa-calendar-alt"></i>
+                    <span>Events</span>
+                    <span class="badge">New</span>
+                </a>
+                <a href="#teams" class="nav-item">
+                    <i class="fas fa-users"></i>
+                    <span>Teams</span>
+                </a>
+                <a href="#analytics" class="nav-item">
+                    <i class="fas fa-chart-bar"></i>
+                    <span>Analytics</span>
+                </a>
+                <a href="#settings" class="nav-item">
+                    <i class="fas fa-cog"></i>
+                    <span>Settings</span>
+                </a>
+            </nav>
+            <button id="logout-btn" class="logout-btn">
+                <i class="fas fa-sign-out-alt"></i>
+                <span>Logout</span>
+            </button>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="content-header">
+                <div class="header-left">
+                    <h1>Dashboard</h1>
+                </div>
+                <div class="header-right">
+                    <div class="search-box">
+                        <input type="text" placeholder="Search events...">
+                        <button class="search-btn">
+                            <i class="fas fa-search"></i>
+                        </button>
+                    </div>
+                    <div class="user-menu">
+                        <button class="user-menu-btn">
+                            <img id="user-avatar" src="https://ui-avatars.com/api/?background=0D8ABC&color=fff" alt="User">
+                            <span id="user-name">Guest</span>
+                            <i class="fas fa-chevron-down"></i>
+                        </button>
+                        <div class="user-dropdown">
+                            <a href="#profile" class="dropdown-item">
+                                <i class="fas fa-user"></i>
+                                Profile
+                            </a>
+                            <a href="#settings" class="dropdown-item">
+                                <i class="fas fa-cog"></i>
+                                Settings
+                            </a>
+                            <div class="dropdown-divider"></div>
+                            <a href="#" class="dropdown-item text-danger" id="logout-link">
+                                <i class="fas fa-sign-out-alt"></i>
+                                Logout
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <div class="dashboard-content">
+                <!-- Statistics -->
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-calendar"></i>
+                        </div>
+                        <div class="stat-info">
+                            <h3>Total Events</h3>
+                            <p id="total-events">0</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-calendar-day"></i>
+                        </div>
+                        <div class="stat-info">
+                            <h3>Upcoming Events</h3>
+                            <p id="upcoming-events">0</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-users"></i>
+                        </div>
+                        <div class="stat-info">
+                            <h3>Total Participants</h3>
+                            <p id="total-participants">0</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-user-friends"></i>
+                        </div>
+                        <div class="stat-info">
+                            <h3>Average Team Size</h3>
+                            <p id="avg-team-size">0</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quick Actions -->
+                <div class="quick-actions">
+                    <h2>Quick Actions</h2>
+                    <div class="actions-grid">
+                        <div class="action-card" onclick="showCreateEventModal()">
+                            <i class="fas fa-plus-circle fa-2x"></i>
+                            <span>Create Event</span>
+                        </div>
+                        <div class="action-card" onclick="showImportEventsModal()">
+                            <i class="fas fa-file-import fa-2x"></i>
+                            <span>Import Events</span>
+                        </div>
+                        <div class="action-card" onclick="window.location.href='#reports'">
+                            <i class="fas fa-chart-line fa-2x"></i>
+                            <span>View Reports</span>
+                        </div>
+                        <div class="action-card" onclick="window.location.href='#settings'">
+                            <i class="fas fa-cog fa-2x"></i>
+                            <span>Settings</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Recent Events -->
+                <div class="recent-events">
+                    <div class="section-header">
+                        <h2>Recent Events</h2>
+                        <a href="#events" class="view-all">View All</a>
+                    </div>
+                    <div class="events-grid">
+                        <!-- Events will be dynamically populated here -->
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Create Event Modal (hidden by default) -->
+    <div id="createEventModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Create New Event</h2>
+                <button class="close-modal">&times;</button>
+            </div>
+            <form id="createEventForm">
+                <div class="form-group">
+                    <label for="eventName">Event Name</label>
+                    <input type="text" id="eventName" required>
+                </div>
+                <div class="form-group">
+                    <label for="eventDate">Date & Time</label>
+                    <input type="datetime-local" id="eventDate" required>
+                </div>
+                <div class="form-group">
+                    <label for="eventLocation">Location</label>
+                    <input type="text" id="eventLocation" required>
+                </div>
+                <div class="form-group">
+                    <label for="teamSize">Team Size</label>
+                    <input type="number" id="teamSize" min="1" required>
+                </div>
+                <div class="form-group">
+                    <label for="eventCost">Cost (₹)</label>
+                    <input type="number" id="eventCost" min="0" required>
+                </div>
+                <div class="form-group">
+                    <label for="eventDescription">Description</label>
+                    <textarea id="eventDescription" rows="4" required></textarea>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn-secondary" onclick="closeCreateEventModal()">Cancel</button>
+                    <button type="submit" class="btn-primary">Create Event</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Firebase Scripts -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
+    <script src="dashboard.js"></script>
+</body>
+</html>

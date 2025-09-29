@@ -1,0 +1,24 @@
+:root {
+  /* Colors */
+  --primary-color: #ff6600;
+  --primary-light: #ff8533;
+  --primary-dark: #e55b00;
+  --text-color: #333;
+  --text-secondary: #666;
+  --border-color: #eee;
+  --surface-color: #fff;
+  --background-color: #f8f9fa;
+  --danger-color: #dc3545;
+  --success-color: #28a745;
+  --warning-color: #ffc107;
+  --info-color: #17a2b8;
+
+  /* Layout */
+  --sidebar-width: 280px;
+  --header-height: 70px;
+
+  /* Shadows */
+  --shadow-sm: 0 2px 4px rgba(0,0,0,0.05);
+  --shadow-md: 0 4px 6px rgba(0,0,0,0.1);
+  --shadow-lg: 0 10px 15px rgba(0,0,0,0.1);
+}
