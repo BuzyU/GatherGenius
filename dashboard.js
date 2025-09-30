@@ -9,33 +9,42 @@ const firebaseConfig = {
     measurementId: "G-309BJ6P79V"
 };
 
-// Initialize Firebase
+// Initialize Firebase only once
 let app;
-try {
-    if (!firebase.apps.length) {
-        app = firebase.initializeApp(firebaseConfig);
-    } else {
-        app = firebase.app();
-    }
-} catch (error) {
-    console.error('Error initializing Firebase:', error);
+if (!firebase.apps.length) {
+    app = firebase.initializeApp(firebaseConfig);
+} else {
+    app = firebase.app();
 }
 
 const auth = firebase.auth();
 const db = firebase.firestore();
 
-// Function to get user data from Firestore
-async function getUserData(uid) {
-    try {
-        const userDoc = await db.collection('users').doc(uid).get();
-        return userDoc.exists ? userDoc.data() : null;
-    } catch (error) {
-        console.error('Error fetching user data:', error);
-        return null;
-    }
-}
+// Enable offline persistence
+db.enablePersistence({ synchronizeTabs: true })
+    .catch((err) => {
+        if (err.code === 'failed-precondition') {
+            console.log('Multiple tabs open, persistence can only be enabled in one tab at a time.');
+        } else if (err.code === 'unimplemented') {
+            console.log('The current browser does not support offline persistence');
+        }
+    });
 
-// Function to update user interface
+// Check authentication
+auth.onAuthStateChanged(async (user) => {
+    if (!user) {
+        window.location.href = 'login.html';
+        return;
+    }
+
+    // Update user interface
+    updateUserInterface(user);
+    
+    // Load dashboard data
+    await loadDashboardData();
+});
+
+// Update user interface with user info
 function updateUserInterface(user) {
     const userNameElement = document.getElementById('user-name');
     const userAvatarElement = document.getElementById('user-avatar');
@@ -48,165 +57,61 @@ function updateUserInterface(user) {
         if (user.photoURL) {
             userAvatarElement.src = user.photoURL;
         } else {
-            // If no photo URL, use a default avatar with user's initial
             const initial = (user.displayName || user.email[0]).charAt(0).toUpperCase();
-            userAvatarElement.src = `https://ui-avatars.com/api/?name=${initial}&background=0D8ABC&color=fff&size=128`;
+            userAvatarElement.src = `https://ui-avatars.com/api/?name=${initial}&background=ff6600&color=fff&size=128`;
         }
     }
 }
 
-// Setup authentication state change listener
-auth.onAuthStateChanged(async (user) => {
-    if (!user) {
-        // User is not logged in, redirect to login page
-        window.location.href = 'login.html';
-        return;
-    }
-
-    // Get additional user data from Firestore
-    const userData = await getUserData(user.uid);
-    
-    // Update the UI with user information
-    const userNameElement = document.getElementById('user-name');
-    const userAvatarElement = document.getElementById('user-avatar');
-    
-    if (userNameElement) {
-        // Use Firestore data if available, otherwise fallback to auth data
-        userNameElement.textContent = userData?.displayName || user.displayName || user.email.split('@')[0];
-    }
-    
-    if (userAvatarElement) {
-        // Use Firestore data if available, otherwise fallback to auth data
-        const photoURL = userData?.photoURL || user.photoURL;
-        if (photoURL) {
-            userAvatarElement.src = photoURL;
-        } else {
-            // If no photo URL, use a default avatar with user's initial
-            const initial = (userData?.displayName || user.displayName || user.email[0]).charAt(0).toUpperCase();
-            userAvatarElement.src = `https://ui-avatars.com/api/?name=${initial}&background=0D8ABC&color=fff&size=128`;
-        }
-    }
-});
-
-// DOM Content Loaded Event Handler
-document.addEventListener('DOMContentLoaded', () => {
-    // Setup logout functionality for both buttons
-    const logoutBtn = document.getElementById('logout-btn');
-    const logoutLink = document.getElementById('logout-link');
-    
-    const handleLogout = async () => {
-        try {
-            await auth.signOut();
-            window.location.href = 'login.html';
-        } catch (error) {
-            console.error('Error signing out:', error);
-            alert('Error signing out. Please try again.');
-        }
-    };
-
-    if (logoutBtn) {
-        logoutBtn.addEventListener('click', handleLogout);
-    }
-
-    if (logoutLink) {
-        logoutLink.addEventListener('click', (e) => {
-            e.preventDefault();
-            handleLogout();
-        });
-    }
-
-    // Initialize Firestore settings
-    db.enablePersistence()
-        .catch((err) => {
-            if (err.code === 'failed-precondition') {
-                console.log('Multiple tabs open, persistence can only be enabled in one tab at a time.');
-            } else if (err.code === 'unimplemented') {
-                console.log('The current browser does not support offline persistence');
-            }
-        });
-});
-    
-    // Mark auth as initialized after first check
-    authInitialized = true;
-
-
-
-
-// ================== UI ELEMENTS ==================
-const menuToggle = document.querySelector('.menu-toggle');
-const sidebar = document.querySelector('.sidebar');
-const userMenuBtn = document.querySelector('.user-menu-btn');
-const userDropdown = document.querySelector('.user-dropdown');
-const searchInput = document.querySelector('.search-box input');
-const eventsGrid = document.querySelector('.events-grid');
-
-// Sidebar toggle
-menuToggle?.addEventListener('click', () => {
-    sidebar.classList.toggle('show');
-});
-
-// User dropdown toggle
-userMenuBtn?.addEventListener('click', () => {
-    userDropdown.classList.toggle('show');
-});
-
-// Close dropdown when clicking outside
-document.addEventListener('click', (e) => {
-    if (!userMenuBtn.contains(e.target)) {
-        userDropdown.classList.remove('show');
-    }
-});
-
-// Logout
-document.getElementById('logout-link')?.addEventListener('click', async (e) => {
-    e.preventDefault(); // prevent default link behavior
-    try {
-        await signOut(auth);
-        localStorage.removeItem('redirected'); // optional
-        window.location.href = 'login.html';
-    } catch (error) {
-        console.error('Error signing out:', error);
-        alert('Error signing out. Please try again.');
-    }
-});
-
-// ================== DASHBOARD DATA ==================
+// Load dashboard data
 async function loadDashboardData() {
     try {
-        const eventsSnapshot = await getDocs(collection(db, 'events'));
+        const eventsSnapshot = await db.collection('events').get();
         const events = [];
-        eventsSnapshot.forEach(doc => events.push({ id: doc.id, ...doc.data() }));
+        eventsSnapshot.forEach(doc => {
+            events.push({ id: doc.id, ...doc.data() });
+        });
 
         updateStats(events);
-        displayEvents(events);
+        displayRecentEvents(events.slice(0, 6)); // Show only 6 recent events
     } catch (error) {
         console.error('Error loading dashboard data:', error);
-        alert('Error loading dashboard data. Please refresh the page.');
+        showError('Error loading dashboard data. Please refresh the page.');
     }
 }
 
+// Update statistics
 function updateStats(events) {
+    const now = new Date();
     const totalEvents = events.length;
-    const upcomingEvents = events.filter(e => new Date(e.date) > new Date()).length;
+    const upcomingEvents = events.filter(e => new Date(e.date) > now).length;
     const totalParticipants = events.reduce((sum, e) => sum + (e.participants?.length || 0), 0);
-    const avgTeamSize = events.reduce((sum, e) => sum + (e.teamSize || 0), 0) / events.length || 0;
+    const avgTeamSize = events.length > 0 
+        ? (events.reduce((sum, e) => sum + (e.teamSize || 0), 0) / events.length).toFixed(1)
+        : 0;
 
     document.getElementById('total-events').textContent = totalEvents;
     document.getElementById('upcoming-events').textContent = upcomingEvents;
     document.getElementById('total-participants').textContent = totalParticipants;
-    document.getElementById('avg-team-size').textContent = avgTeamSize.toFixed(1);
+    document.getElementById('avg-team-size').textContent = avgTeamSize;
 }
 
-function displayEvents(events) {
+// Display recent events
+function displayRecentEvents(events) {
+    const eventsGrid = document.querySelector('.events-grid');
     if (!eventsGrid) return;
 
-    const sortedEvents = events.sort((a, b) => new Date(a.date) - new Date(b.date));
+    if (events.length === 0) {
+        eventsGrid.innerHTML = '<div class="no-events"><p>No events created yet. Create your first event!</p></div>';
+        return;
+    }
+
+    const sortedEvents = events.sort((a, b) => new Date(b.createdAt?.toDate?.() || b.createdAt) - new Date(a.createdAt?.toDate?.() || a.createdAt));
 
     eventsGrid.innerHTML = sortedEvents.map(event => {
         const eventDate = new Date(event.date);
         const now = new Date();
-        const isUpcoming = eventDate > now;
-        const status = isUpcoming ? 'upcoming' : 
+        const status = eventDate > now ? 'upcoming' : 
                       (eventDate.toDateString() === now.toDateString() ? 'in-progress' : 'completed');
         
         return `
@@ -239,92 +144,220 @@ function displayEvents(events) {
                 </button>
             </div>
         </div>
-    `}).join('');
+        `}).join('');
 }
 
-// Utility function to truncate text
+// Format date helper
+function formatDate(dateStr) {
+    const options = { 
+        year: 'numeric', 
+        month: 'short', 
+        day: 'numeric', 
+        hour: '2-digit', 
+        minute: '2-digit'
+    };
+    return new Date(dateStr).toLocaleDateString('en-IN', options);
+}
+
+// Truncate text helper
 function truncateText(text, maxLength) {
+    if (!text) return '';
     if (text.length <= maxLength) return text;
     return text.substr(0, maxLength) + '...';
 }
 
-
-// Event CRUD functions
-window.showCreateEventModal = () => {
+// Show create event modal
+window.showCreateEventModal = function() {
     const modal = document.getElementById('createEventModal');
-    modal.classList.add('show');
-};
-
-window.closeCreateEventModal = () => {
-    const modal = document.getElementById('createEventModal');
-    modal.classList.remove('show');
-    document.getElementById('createEventForm').reset();
-};
-
-// Create Event
-document.getElementById('createEventForm')?.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    
-    const eventData = {
-        name: document.getElementById('eventName').value,
-        date: new Date(document.getElementById('eventDate').value).toISOString(),
-        location: document.getElementById('eventLocation').value,
-        teamSize: parseInt(document.getElementById('teamSize').value),
-        cost: parseInt(document.getElementById('eventCost').value),
-        description: document.getElementById('eventDescription').value,
-        createdBy: auth.currentUser.uid,
-        createdAt: new Date().toISOString(),
-        participants: [],
-        maxTeams: 10 // Default value, can be made adjustable
-    };
-
-    try {
-        await addDoc(collection(db, 'events'), eventData);
-        closeCreateEventModal();
-        loadDashboardData();
-        showSuccess('Event created successfully');
-    } catch (err) {
-        console.error('Error creating event:', err);
-        showError('Error creating event. Please try again.');
+    if (modal) {
+        modal.style.display = 'flex';
     }
-});
+};
 
-// View Event Details
-window.viewEventDetails = (id) => {
+// Close create event modal
+window.closeCreateEventModal = function() {
+    const modal = document.getElementById('createEventModal');
+    if (modal) {
+        modal.style.display = 'none';
+        document.getElementById('createEventForm').reset();
+    }
+};
+
+// Show import events modal (placeholder)
+window.showImportEventsModal = function() {
+    showInfo('Import events feature coming soon!');
+};
+
+// View event details
+window.viewEventDetails = function(id) {
     window.location.href = `event-details.html?id=${id}`;
 };
 
-// Edit Event
-window.editEvent = (id) => {
+// Edit event
+window.editEvent = function(id) {
     window.location.href = `event-details.html?id=${id}&edit=true`;
 };
 
-// Delete Event
-window.deleteEvent = async (id) => {
-    if (!confirm('Are you sure you want to delete this event? This action cannot be undone.')) return;
+// Delete event
+window.deleteEvent = async function(id) {
+    if (!confirm('Are you sure you want to delete this event? This action cannot be undone.')) {
+        return;
+    }
     
     try {
-        await deleteDoc(doc(db, 'events', id));
-        loadDashboardData();
+        await db.collection('events').doc(id).delete();
         showSuccess('Event deleted successfully');
-    } catch (err) {
-        console.error('Error deleting event:', err);
+        await loadDashboardData();
+    } catch (error) {
+        console.error('Error deleting event:', error);
         showError('Error deleting event. Please try again.');
     }
 };
 
-// Utilities
-function formatDate(dateStr) {
-    const options = { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' };
-    return new Date(dateStr).toLocaleDateString('en-IN', options);
+// Handle create event form submission
+document.addEventListener('DOMContentLoaded', () => {
+    const createEventForm = document.getElementById('createEventForm');
+    if (createEventForm) {
+        createEventForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const user = auth.currentUser;
+            if (!user) {
+                showError('You must be logged in to create an event');
+                return;
+            }
+
+            const submitButton = createEventForm.querySelector('button[type="submit"]');
+            const originalText = submitButton.innerHTML;
+            submitButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creating...';
+            submitButton.disabled = true;
+
+            try {
+                const eventData = {
+                    name: document.getElementById('eventName').value,
+                    date: document.getElementById('eventDate').value,
+                    location: document.getElementById('eventLocation').value,
+                    teamSize: parseInt(document.getElementById('teamSize').value),
+                    maxTeams: parseInt(document.getElementById('maxTeams')?.value || 10),
+                    cost: parseFloat(document.getElementById('eventCost').value),
+                    description: document.getElementById('eventDescription').value,
+                    createdBy: user.uid,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    status: 'upcoming',
+                    participants: []
+                };
+
+                await db.collection('events').add(eventData);
+
+                showSuccess('Event created successfully!');
+                closeCreateEventModal();
+                await loadDashboardData();
+
+            } catch (error) {
+                console.error('Error creating event:', error);
+                showError('Failed to create event. Please try again.');
+            } finally {
+                submitButton.innerHTML = originalText;
+                submitButton.disabled = false;
+            }
+        });
+    }
+
+    // Close modal when clicking outside
+    const modal = document.getElementById('createEventModal');
+    if (modal) {
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                closeCreateEventModal();
+            }
+        });
+    }
+
+    // Close modal button
+    const closeBtn = document.querySelector('.close-modal');
+    if (closeBtn) {
+        closeBtn.addEventListener('click', closeCreateEventModal);
+    }
+
+    // Sidebar toggle for mobile
+    const menuToggle = document.querySelector('.menu-toggle');
+    const sidebar = document.querySelector('.sidebar');
+    if (menuToggle && sidebar) {
+        menuToggle.addEventListener('click', () => {
+            sidebar.classList.toggle('show');
+        });
+    }
+
+    // User dropdown toggle
+    const userMenuBtn = document.querySelector('.user-menu-btn');
+    const userDropdown = document.querySelector('.user-dropdown');
+    if (userMenuBtn && userDropdown) {
+        userMenuBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            userDropdown.classList.toggle('show');
+        });
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', () => {
+            userDropdown.classList.remove('show');
+        });
+    }
+
+    // Logout functionality
+    const logoutBtn = document.getElementById('logout-btn');
+    const logoutLink = document.getElementById('logout-link');
+    
+    const handleLogout = async () => {
+        try {
+            await auth.signOut();
+            window.location.href = 'login.html';
+        } catch (error) {
+            console.error('Error signing out:', error);
+            showError('Error signing out. Please try again.');
+        }
+    };
+
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', handleLogout);
+    }
+
+    if (logoutLink) {
+        logoutLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            handleLogout();
+        });
+    }
+});
+
+// Toast notification functions
+function showSuccess(message) {
+    showToast(message, 'success');
 }
 
-// Search events
-searchInput?.addEventListener('input', (e) => {
-    const term = e.target.value.toLowerCase();
-    document.querySelectorAll('.event-card').forEach(card => {
-        const name = card.querySelector('h3').textContent.toLowerCase();
-        const location = card.querySelector('.event-details p')?.textContent.toLowerCase() || '';
-        card.style.display = (name.includes(term) || location.includes(term)) ? 'block' : 'none';
-    });
-});
+function showError(message) {
+    showToast(message, 'error');
+}
+
+function showInfo(message) {
+    showToast(message, 'info');
+}
+
+function showToast(message, type = 'info') {
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.innerHTML = `
+        <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'}"></i>
+        <span>${message}</span>
+    `;
+    
+    document.body.appendChild(toast);
+    
+    // Trigger animation
+    setTimeout(() => toast.classList.add('show'), 10);
+    
+    // Remove after 3 seconds
+    setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}
