@@ -180,8 +180,25 @@ function displayEvents(events) {
     }).join('');
 }
 
-
+// Add event listeners for filters and search
+document.addEventListener('DOMContentLoaded', () => {
+    const statusFilter = document.getElementById('status-filter');
+    const sortFilter = document.getElementById('sort-filter');
+    const searchInput = document.querySelector('.search-box input');
+    
+    if (statusFilter) {
+        statusFilter.addEventListener('change', applyFiltersAndDisplay);
+    }
+    
+    if (sortFilter) {
+        sortFilter.addEventListener('change', applyFiltersAndDisplay);
+    }
+    
+    if (searchInput) {
+        searchInput.addEventListener('input', applyFiltersAndDisplay);
+    }
+});
 
 function viewEventDetails(id) {
-    alert("View details of event: " + id);
+    window.location.href = `event-details.html?id=${id}`;
 }

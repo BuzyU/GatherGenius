@@ -1,30 +1,37 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js";
-import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-auth.js";
-import { getFirestore, doc, getDoc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore.js";
-
+// Firebase configuration - MUST MATCH dashboard.js
 const firebaseConfig = {
-    apiKey: "AIzaSyBPCMzzlGJ8c_yrzXUpiwEPSCFTdiJoI3g",
-    authDomain: "gathergenius-c8b58.firebaseapp.com",
-    projectId: "gathergenius-c8b58",
-    storageBucket: "gathergenius-c8b58.appspot.com",
-    messagingSenderId: "635007345318",
-    appId: "1:635007345318:web:fe911da7303ad413c54e13",
-    measurementId: "G-PZ8C22WXF0"
+    apiKey: "AIzaSyCKd_iH-McAMrKI_0YDoYG0xjn2KrQpTOQ",
+    authDomain: "notifyme-events.firebaseapp.com",
+    projectId: "notifyme-events",
+    storageBucket: "notifyme-events.firebasestorage.app",
+    messagingSenderId: "761571632545",
+    appId: "1:761571632545:web:547a7210fdebf366df97e0",
+    measurementId: "G-309BJ6P79V"
 };
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const auth = getAuth();
-const db = getFirestore();
+// Initialize Firebase only once
+if (!firebase.apps.length) {
+    firebase.initializeApp(firebaseConfig);
+}
+
+const auth = firebase.auth();
+const db = firebase.firestore();
 
 let currentEvent = null;
+let currentUser = null;
 const eventId = new URLSearchParams(window.location.search).get('id');
 
+// Check if event ID exists in URL
+if (!eventId) {
+    window.location.href = 'dashboard.html';
+}
+
 // Check authentication and load event data
-onAuthStateChanged(auth, (user) => {
+auth.onAuthStateChanged((user) => {
     if (!user) {
         window.location.href = 'login.html';
     } else {
+        currentUser = user;
         loadEventDetails();
     }
 });
@@ -32,10 +39,11 @@ onAuthStateChanged(auth, (user) => {
 // Load event details
 async function loadEventDetails() {
     try {
-        const eventDoc = await getDoc(doc(db, 'events', eventId));
-        if (eventDoc.exists()) {
+        const eventDoc = await db.collection('events').doc(eventId).get();
+        if (eventDoc.exists) {
             currentEvent = { id: eventDoc.id, ...eventDoc.data() };
             displayEventDetails(currentEvent);
+            updateUIForUserRole();
         } else {
             showError('Event not found');
             setTimeout(() => {
@@ -48,9 +56,18 @@ async function loadEventDetails() {
     }
 }
 
+// Update UI based on user role (organizer vs participant)
+function updateUIForUserRole() {
+    const isOrganizer = currentUser && currentEvent.createdBy === currentUser.uid;
+    const eventActions = document.querySelector('.event-actions');
+    
+    if (eventActions) {
+        eventActions.style.display = isOrganizer ? 'flex' : 'none';
+    }
+}
+
 // Display event details
 function displayEventDetails(event) {
-    // Set event title and status
     document.getElementById('event-title').textContent = event.name;
     const eventDate = new Date(event.date);
     const now = new Date();
@@ -60,17 +77,13 @@ function displayEventDetails(event) {
     statusElement.textContent = status.charAt(0).toUpperCase() + status.slice(1);
     statusElement.className = `event-status ${status}`;
 
-    // Set event information
     document.getElementById('event-datetime').textContent = new Date(event.date).toLocaleString();
     document.getElementById('event-location').textContent = event.location;
     document.getElementById('event-team-size').textContent = `${event.teamSize} members`;
     document.getElementById('event-cost').textContent = `₹${event.cost}`;
     document.getElementById('event-description').textContent = event.description;
 
-    // Load participants
     loadParticipants(event.participants || []);
-
-    // Update registration status
     updateRegistrationStatus(event);
 }
 
@@ -92,6 +105,7 @@ function loadParticipants(participants) {
             <div class="participant-info">
                 <h4>${participant.name}</h4>
                 <p>${participant.email}</p>
+                ${participant.registeredAt ? `<small>Registered: ${new Date(participant.registeredAt).toLocaleDateString()}</small>` : ''}
             </div>
         `;
         participantsList.appendChild(participantCard);
@@ -103,15 +117,43 @@ function updateRegistrationStatus(event) {
     const registrationStatus = document.getElementById('registration-status');
     const eventDate = new Date(event.date);
     const now = new Date();
+    const isOrganizer = currentUser && event.createdBy === currentUser.uid;
+    
+    // Generate registration URL
+    const registrationUrl = `${window.location.origin}/registration.html?eventId=${eventId}`;
+
+    if (isOrganizer) {
+        const participants = event.participants || [];
+        const maxParticipants = event.teamSize * (event.maxTeams || 10);
+        registrationStatus.innerHTML = `
+            <div class="organizer-info">
+                <p class="registration-info">Total registered: ${participants.length} / ${maxParticipants}</p>
+                <div class="registration-url-section">
+                    <h4>Registration Link</h4>
+                    <div class="url-copy-container">
+                        <input type="text" id="registration-url" value="${registrationUrl}" readonly>
+                        <button class="btn-primary" onclick="copyRegistrationUrl()">
+                            <i class="fas fa-copy"></i> Copy Link
+                        </button>
+                    </div>
+                    <p class="url-hint">Share this link with participants to register</p>
+                </div>
+            </div>
+        `;
+        return;
+    }
 
     if (eventDate < now) {
         registrationStatus.innerHTML = '<p class="registration-closed">Registration closed</p>';
     } else {
-        const maxParticipants = event.teamSize * event.maxTeams;
+        const maxParticipants = event.teamSize * (event.maxTeams || 10);
         const currentParticipants = (event.participants || []).length;
         const spotsLeft = maxParticipants - currentParticipants;
+        const isRegistered = event.participants?.some(p => p.uid === currentUser.uid);
 
-        if (spotsLeft > 0) {
+        if (isRegistered) {
+            registrationStatus.innerHTML = '<p class="registration-success">✓ You are registered for this event</p>';
+        } else if (spotsLeft > 0) {
             registrationStatus.innerHTML = `
                 <p class="registration-open">Registration open - ${spotsLeft} spots left</p>
                 <button class="btn-primary" onclick="registerForEvent()">Register Now</button>
@@ -122,12 +164,25 @@ function updateRegistrationStatus(event) {
     }
 }
 
+// Copy registration URL
+window.copyRegistrationUrl = function() {
+    const urlInput = document.getElementById('registration-url');
+    urlInput.select();
+    urlInput.setSelectionRange(0, 99999);
+    document.execCommand('copy');
+    showSuccess('Registration link copied to clipboard!');
+};
+
 // Show edit event modal
 window.showEditEventModal = function() {
+    if (!currentUser || currentEvent.createdBy !== currentUser.uid) {
+        showError('Only the event organizer can edit this event');
+        return;
+    }
+
     const modal = document.getElementById('editEventModal');
     const form = document.getElementById('editEventForm');
 
-    // Populate form with current event data
     document.getElementById('editEventName').value = currentEvent.name;
     document.getElementById('editEventDate').value = new Date(currentEvent.date).toISOString().slice(0, 16);
     document.getElementById('editEventLocation').value = currentEvent.location;
@@ -137,7 +192,7 @@ window.showEditEventModal = function() {
 
     modal.classList.add('show');
 
-    // Handle form submission
+    form.onsubmit = null;
     form.onsubmit = async (e) => {
         e.preventDefault();
         await updateEvent();
@@ -146,19 +201,27 @@ window.showEditEventModal = function() {
 
 // Update event
 async function updateEvent() {
+    if (!currentUser || currentEvent.createdBy !== currentUser.uid) {
+        showError('Only the event organizer can update this event');
+        return;
+    }
+
     try {
         const updatedEvent = {
             name: document.getElementById('editEventName').value,
-            date: new Date(document.getElementById('editEventDate').value).toISOString(),
+            date: document.getElementById('editEventDate').value,
             location: document.getElementById('editEventLocation').value,
             teamSize: parseInt(document.getElementById('editTeamSize').value),
-            cost: parseInt(document.getElementById('editEventCost').value),
+            cost: parseFloat(document.getElementById('editEventCost').value),
             description: document.getElementById('editEventDescription').value,
-            lastUpdated: new Date().toISOString()
+            lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
         };
 
-        await updateDoc(doc(db, 'events', eventId), updatedEvent);
-        window.location.reload();
+        await db.collection('events').doc(eventId).update(updatedEvent);
+        
+        closeEditEventModal();
+        await loadEventDetails();
+        showSuccess('Event updated successfully!');
     } catch (error) {
         console.error('Error updating event:', error);
         showError('Error updating event');
@@ -167,32 +230,53 @@ async function updateEvent() {
 
 // Delete event
 window.deleteEvent = async function() {
+    if (!currentUser || currentEvent.createdBy !== currentUser.uid) {
+        showError('Only the event organizer can delete this event');
+        closeDeleteConfirmModal();
+        return;
+    }
+
     try {
-        await deleteDoc(doc(db, 'events', eventId));
-        window.location.href = 'dashboard.html';
+        await db.collection('events').doc(eventId).delete();
+        closeDeleteConfirmModal();
+        showSuccess('Event deleted successfully!');
+        
+        setTimeout(() => {
+            window.location.href = 'dashboard.html';
+        }, 1500);
     } catch (error) {
         console.error('Error deleting event:', error);
         showError('Error deleting event');
     }
 };
 
-// Show error message
+// Show/hide messages
 function showError(message) {
     const toast = document.createElement('div');
     toast.className = 'toast error';
     toast.textContent = message;
     document.body.appendChild(toast);
-    setTimeout(() => {
-        toast.remove();
-    }, 3000);
+    setTimeout(() => toast.remove(), 3000);
 }
 
-// Modal control functions
+function showSuccess(message) {
+    const toast = document.createElement('div');
+    toast.className = 'toast success';
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
+}
+
+// Modal controls
 window.closeEditEventModal = function() {
     document.getElementById('editEventModal').classList.remove('show');
 };
 
 window.confirmDeleteEvent = function() {
+    if (!currentUser || currentEvent.createdBy !== currentUser.uid) {
+        showError('Only the event organizer can delete this event');
+        return;
+    }
     document.getElementById('deleteConfirmModal').classList.add('show');
 };
 
@@ -209,25 +293,39 @@ window.registerForEvent = async function() {
             return;
         }
 
-        const eventRef = doc(db, 'events', eventId);
-        const eventDoc = await getDoc(eventRef);
+        if (currentEvent.createdBy === user.uid) {
+            showError('Event organizers cannot register for their own events');
+            return;
+        }
+
+        const eventRef = db.collection('events').doc(eventId);
+        const eventDoc = await eventRef.get();
+        
+        if (!eventDoc.exists) {
+            showError('Event not found');
+            return;
+        }
+
         const event = eventDoc.data();
         const participants = event.participants || [];
 
-        // Check if user is already registered
         if (participants.some(p => p.uid === user.uid)) {
             showError('You are already registered for this event');
             return;
         }
 
-        // Check if event is full
-        const maxParticipants = event.teamSize * event.maxTeams;
+        const maxParticipants = event.teamSize * (event.maxTeams || 10);
         if (participants.length >= maxParticipants) {
             showError('Event is full');
             return;
         }
 
-        // Add participant
+        const eventDate = new Date(event.date);
+        if (eventDate < new Date()) {
+            showError('Cannot register for past events');
+            return;
+        }
+
         participants.push({
             uid: user.uid,
             name: user.displayName || user.email.split('@')[0],
@@ -236,10 +334,28 @@ window.registerForEvent = async function() {
             registeredAt: new Date().toISOString()
         });
 
-        await updateDoc(eventRef, { participants });
-        window.location.reload();
+        await eventRef.update({ participants });
+        
+        await loadEventDetails();
+        showSuccess('Successfully registered for event!');
     } catch (error) {
         console.error('Error registering for event:', error);
         showError('Error registering for event');
     }
 };
+
+// Logout
+document.addEventListener('DOMContentLoaded', () => {
+    const logoutBtn = document.getElementById('logout-btn');
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', async () => {
+            try {
+                await auth.signOut();
+                window.location.href = 'login.html';
+            } catch (error) {
+                console.error('Error signing out:', error);
+                showError('Error signing out');
+            }
+        });
+    }
+});

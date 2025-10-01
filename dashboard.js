@@ -361,3 +361,406 @@ function showToast(message, type = 'info') {
         setTimeout(() => toast.remove(), 300);
     }, 3000);
 }
+// ========================================
+// MOBILE MENU FUNCTIONALITY
+// Add this to your dashboard.js or events.js
+// ========================================
+
+document.addEventListener('DOMContentLoaded', () => {
+    // Mobile Menu Toggle
+    const menuToggle = document.querySelector('.menu-toggle');
+    const sidebar = document.querySelector('.sidebar');
+    const mainContent = document.querySelector('.main-content');
+    
+    if (menuToggle && sidebar) {
+        menuToggle.addEventListener('click', (e) => {
+            e.stopPropagation();
+            sidebar.classList.toggle('show');
+            
+            // Add overlay for mobile
+            if (sidebar.classList.contains('show')) {
+                createOverlay();
+            } else {
+                removeOverlay();
+            }
+        });
+    }
+
+    // Close sidebar when clicking outside on mobile
+    document.addEventListener('click', (e) => {
+        if (window.innerWidth <= 768) {
+            if (sidebar && sidebar.classList.contains('show')) {
+                if (!sidebar.contains(e.target) && !menuToggle.contains(e.target)) {
+                    sidebar.classList.remove('show');
+                    removeOverlay();
+                }
+            }
+        }
+    });
+
+    // Close sidebar when clicking nav items on mobile
+    const navItems = document.querySelectorAll('.nav-item');
+    navItems.forEach(item => {
+        item.addEventListener('click', () => {
+            if (window.innerWidth <= 768) {
+                sidebar.classList.remove('show');
+                removeOverlay();
+            }
+        });
+    });
+
+    // Handle window resize
+    let resizeTimer;
+    window.addEventListener('resize', () => {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(() => {
+            if (window.innerWidth > 768) {
+                sidebar.classList.remove('show');
+                removeOverlay();
+            }
+        }, 250);
+    });
+
+    // Create overlay for mobile menu
+    function createOverlay() {
+        if (!document.querySelector('.sidebar-overlay')) {
+            const overlay = document.createElement('div');
+            overlay.className = 'sidebar-overlay';
+            overlay.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0, 0, 0, 0.5);
+                z-index: 1999;
+                animation: fadeIn 0.3s ease;
+            `;
+            
+            overlay.addEventListener('click', () => {
+                sidebar.classList.remove('show');
+                removeOverlay();
+            });
+            
+            document.body.appendChild(overlay);
+        }
+    }
+
+    // Remove overlay
+    function removeOverlay() {
+        const overlay = document.querySelector('.sidebar-overlay');
+        if (overlay) {
+            overlay.style.animation = 'fadeOut 0.3s ease';
+            setTimeout(() => overlay.remove(), 300);
+        }
+    }
+
+    // Add fade animations
+    if (!document.querySelector('#mobile-animations')) {
+        const style = document.createElement('style');
+        style.id = 'mobile-animations';
+        style.textContent = `
+            @keyframes fadeIn {
+                from { opacity: 0; }
+                to { opacity: 1; }
+            }
+            @keyframes fadeOut {
+                from { opacity: 1; }
+                to { opacity: 0; }
+            }
+        `;
+        document.head.appendChild(style);
+    }
+
+    // Mobile-friendly modal positioning
+    const modals = document.querySelectorAll('.modal');
+    modals.forEach(modal => {
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                modal.style.display = 'none';
+            }
+        });
+    });
+
+    // Prevent body scroll when modal is open
+    const observer = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+            if (mutation.target.style.display === 'flex') {
+                document.body.style.overflow = 'hidden';
+            } else if (mutation.target.style.display === 'none') {
+                document.body.style.overflow = '';
+            }
+        });
+    });
+
+    modals.forEach(modal => {
+        observer.observe(modal, {
+            attributes: true,
+            attributeFilter: ['style']
+        });
+    });
+
+    // Touch swipe to close sidebar on mobile
+    let touchStartX = 0;
+    let touchEndX = 0;
+
+    if (sidebar) {
+        sidebar.addEventListener('touchstart', (e) => {
+            touchStartX = e.changedTouches[0].screenX;
+        }, { passive: true });
+
+        sidebar.addEventListener('touchend', (e) => {
+            touchEndX = e.changedTouches[0].screenX;
+            handleSwipe();
+        }, { passive: true });
+    }
+
+    function handleSwipe() {
+        if (window.innerWidth <= 768) {
+            const swipeDistance = touchEndX - touchStartX;
+            // Swipe left to close (at least 50px)
+            if (swipeDistance < -50 && sidebar.classList.contains('show')) {
+                sidebar.classList.remove('show');
+                removeOverlay();
+            }
+        }
+    }
+
+    // Improve form input experience on mobile
+    const inputs = document.querySelectorAll('input, textarea');
+    inputs.forEach(input => {
+        // Auto-focus first input when modal opens (desktop only)
+        if (window.innerWidth > 768) {
+            const modal = input.closest('.modal');
+            if (modal) {
+                const observer = new MutationObserver((mutations) => {
+                    mutations.forEach((mutation) => {
+                        if (modal.style.display === 'flex') {
+                            setTimeout(() => input.focus(), 100);
+                        }
+                    });
+                });
+                observer.observe(modal, {
+                    attributes: true,
+                    attributeFilter: ['style']
+                });
+            }
+        }
+
+        // Scroll input into view on mobile when focused
+        if (window.innerWidth <= 768) {
+            input.addEventListener('focus', () => {
+                setTimeout(() => {
+                    input.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'center'
+                    });
+                }, 300);
+            });
+        }
+    });
+
+    // Optimize card interactions for mobile
+    const eventCards = document.querySelectorAll('.event-card');
+    eventCards.forEach(card => {
+        let touchStartY = 0;
+        let touchEndY = 0;
+
+        card.addEventListener('touchstart', (e) => {
+            touchStartY = e.changedTouches[0].screenY;
+        }, { passive: true });
+
+        card.addEventListener('touchend', (e) => {
+            touchEndY = e.changedTouches[0].screenY;
+            // If it's a tap (not a scroll), add visual feedback
+            if (Math.abs(touchEndY - touchStartY) < 10) {
+                card.style.transform = 'scale(0.98)';
+                setTimeout(() => {
+                    card.style.transform = '';
+                }, 100);
+            }
+        }, { passive: true });
+    });
+
+    // Add pull-to-refresh hint on mobile (optional)
+    if (window.innerWidth <= 768 && 'ontouchstart' in window) {
+        let startY = 0;
+        let currentY = 0;
+
+        mainContent.addEventListener('touchstart', (e) => {
+            if (mainContent.scrollTop === 0) {
+                startY = e.touches[0].pageY;
+            }
+        }, { passive: true });
+
+        mainContent.addEventListener('touchmove', (e) => {
+            if (mainContent.scrollTop === 0) {
+                currentY = e.touches[0].pageY;
+                const pullDistance = currentY - startY;
+
+                if (pullDistance > 100) {
+                    // Optional: Add visual feedback for pull-to-refresh
+                    console.log('Pull to refresh triggered');
+                }
+            }
+        }, { passive: true });
+    }
+
+    // Keyboard navigation improvements
+    document.addEventListener('keydown', (e) => {
+        // ESC key closes modal
+        if (e.key === 'Escape') {
+            const openModal = document.querySelector('.modal[style*="display: flex"]');
+            if (openModal) {
+                openModal.style.display = 'none';
+            }
+            
+            // Close sidebar on mobile
+            if (window.innerWidth <= 768 && sidebar.classList.contains('show')) {
+                sidebar.classList.remove('show');
+                removeOverlay();
+            }
+        }
+
+        // Tab key navigation
+        if (e.key === 'Tab') {
+            const focusableElements = document.querySelectorAll(
+                'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+            );
+            
+            const firstElement = focusableElements[0];
+            const lastElement = focusableElements[focusableElements.length - 1];
+
+            // Trap focus in modal when open
+            const openModal = document.querySelector('.modal[style*="display: flex"]');
+            if (openModal) {
+                const modalFocusable = openModal.querySelectorAll(
+                    'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled])'
+                );
+                
+                if (modalFocusable.length > 0) {
+                    const modalFirst = modalFocusable[0];
+                    const modalLast = modalFocusable[modalFocusable.length - 1];
+
+                    if (e.shiftKey && document.activeElement === modalFirst) {
+                        e.preventDefault();
+                        modalLast.focus();
+                    } else if (!e.shiftKey && document.activeElement === modalLast) {
+                        e.preventDefault();
+                        modalFirst.focus();
+                    }
+                }
+            }
+        }
+    });
+
+    // Performance optimization: Lazy load images
+    if ('IntersectionObserver' in window) {
+        const imageObserver = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const img = entry.target;
+                    if (img.dataset.src) {
+                        img.src = img.dataset.src;
+                        img.removeAttribute('data-src');
+                        imageObserver.unobserve(img);
+                    }
+                }
+            });
+        });
+
+        document.querySelectorAll('img[data-src]').forEach(img => {
+            imageObserver.observe(img);
+        });
+    }
+
+    // Network status indicator for mobile
+    if ('onLine' in navigator) {
+        function updateOnlineStatus() {
+            const statusIndicator = document.querySelector('.network-status') || createNetworkStatusIndicator();
+            
+            if (navigator.onLine) {
+                statusIndicator.textContent = '';
+                statusIndicator.style.display = 'none';
+            } else {
+                statusIndicator.textContent = '⚠️ No internet connection';
+                statusIndicator.style.display = 'block';
+            }
+        }
+
+        function createNetworkStatusIndicator() {
+            const indicator = document.createElement('div');
+            indicator.className = 'network-status';
+            indicator.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                background: #ff9800;
+                color: white;
+                padding: 8px;
+                text-align: center;
+                font-size: 0.9rem;
+                z-index: 9999;
+                display: none;
+            `;
+            document.body.appendChild(indicator);
+            return indicator;
+        }
+
+        window.addEventListener('online', updateOnlineStatus);
+        window.addEventListener('offline', updateOnlineStatus);
+    }
+
+    // Optimize scroll performance on mobile
+    let scrollTimeout;
+    let isScrolling = false;
+
+    window.addEventListener('scroll', () => {
+        if (!isScrolling) {
+            isScrolling = true;
+            document.body.classList.add('is-scrolling');
+        }
+
+        clearTimeout(scrollTimeout);
+        scrollTimeout = setTimeout(() => {
+            isScrolling = false;
+            document.body.classList.remove('is-scrolling');
+        }, 150);
+    }, { passive: true });
+
+    // Add scroll optimization CSS
+    const scrollStyle = document.createElement('style');
+    scrollStyle.textContent = `
+        .is-scrolling * {
+            pointer-events: none !important;
+        }
+        
+        .is-scrolling .event-card {
+            transition: none !important;
+        }
+    `;
+    document.head.appendChild(scrollStyle);
+
+    console.log('Mobile enhancements loaded successfully');
+});
+
+// Utility function to detect mobile device
+function isMobileDevice() {
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+}
+
+// Utility function to get device type
+function getDeviceType() {
+    const width = window.innerWidth;
+    if (width <= 480) return 'mobile-small';
+    if (width <= 768) return 'mobile';
+    if (width <= 1024) return 'tablet';
+    return 'desktop';
+}
+
+// Log device info (useful for debugging)
+console.log('Device type:', getDeviceType());
+console.log('Is mobile:', isMobileDevice());
+console.log('Screen width:', window.innerWidth);
+console.log('Viewport height:', window.innerHeight);

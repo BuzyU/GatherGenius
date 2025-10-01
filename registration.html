@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Event Registration - GatherGenius</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        :root {
+            --primary-color: #ff6600;
+            --primary-dark: #e55b00;
+            --text-color: #333;
+            --background-color: #f5f5f5;
+            --border-color: #ddd;
+            --error-color: #dc3545;
+            --success-color: #28a745;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, rgba(255,102,0,0.1) 0%, rgba(255,136,0,0.1) 100%), #f5f5f5;
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .registration-container {
+            background: #fff;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            max-width: 600px;
+            width: 100%;
+            overflow: hidden;
+        }
+
+        .registration-header {
+            text-align: center;
+            padding: 40px 40px 30px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .registration-header h1 {
+            color: var(--text-color);
+            font-size: 2rem;
+            margin-bottom: 10px;
+        }
+
+        .registration-header p {
+            color: #666;
+            font-size: 0.95rem;
+        }
+
+        .event-info {
+            background: #f8f9fa;
+            padding: 25px 40px;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .event-info h2 {
+            color: var(--text-color);
+            margin-bottom: 15px;
+            font-size: 1.3rem;
+        }
+
+        .event-detail {
+            display: flex;
+            align-items: center;
+            margin: 12px 0;
+            color: #666;
+            font-size: 0.95rem;
+        }
+
+        .event-detail i {
+            width: 30px;
+            color: var(--primary-color);
+        }
+
+        .registration-form {
+            padding: 30px 40px 40px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+            text-align: left;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #444;
+            font-size: 0.9rem;
+        }
+
+        .form-group input,
+        .form-group textarea {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid var(--border-color);
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: border-color 0.3s ease;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 5px rgba(255,102,0,0.3);
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        .submit-btn {
+            width: 100%;
+            padding: 14px;
+            background: var(--primary-color);
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .submit-btn:hover {
+            background: var(--primary-dark);
+            transform: translateY(-2px);
+        }
+
+        .submit-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .loading-spinner {
+            display: none;
+            text-align: center;
+            padding: 60px 40px;
+        }
+
+        .loading-spinner.active {
+            display: block;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid var(--primary-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .success-message {
+            display: none;
+            text-align: center;
+            padding: 60px 40px;
+        }
+
+        .success-message.active {
+            display: block;
+        }
+
+        .success-message i {
+            font-size: 4rem;
+            color: var(--success-color);
+            margin-bottom: 20px;
+        }
+
+        .success-message h2 {
+            color: var(--text-color);
+            margin-bottom: 10px;
+        }
+
+        .success-message p {
+            color: #666;
+        }
+
+        .error-message {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+            font-size: 0.9rem;
+        }
+
+        .error-message.active {
+            display: block;
+        }
+
+        .spots-remaining {
+            background: #d1ecf1;
+            color: #0c5460;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            text-align: center;
+            font-weight: 600;
+            font-size: 0.95rem;
+        }
+
+        @media (max-width: 768px) {
+            .registration-header,
+            .event-info,
+            .registration-form {
+                padding-left: 25px;
+                padding-right: 25px;
+            }
+
+            .registration-header h1 {
+                font-size: 1.5rem;
+            }
+
+            .event-info h2 {
+                font-size: 1.1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="registration-container">
+        <div class="registration-header">
+            <h1>Event Registration</h1>
+            <p>Fill in your details to register</p>
+        </div>
+
+        <div id="loading" class="loading-spinner">
+            <div class="spinner"></div>
+            <p style="color: #666;">Loading event details...</p>
+        </div>
+
+        <div id="eventContent" style="display: none;">
+            <div class="event-info">
+                <h2 id="eventName">Event Name</h2>
+                <div class="event-detail">
+                    <i class="fas fa-calendar"></i>
+                    <span id="eventDate">Date</span>
+                </div>
+                <div class="event-detail">
+                    <i class="fas fa-map-marker-alt"></i>
+                    <span id="eventLocation">Location</span>
+                </div>
+                <div class="event-detail">
+                    <i class="fas fa-rupee-sign"></i>
+                    <span id="eventCost">Cost</span>
+                </div>
+            </div>
+
+            <form id="registrationForm" class="registration-form">
+                <div id="spotsRemaining" class="spots-remaining"></div>
+                <div id="errorMessage" class="error-message"></div>
+
+                <div class="form-group">
+                    <label for="fullName">Full Name *</label>
+                    <input type="text" id="fullName" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="email">Email Address *</label>
+                    <input type="email" id="email" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="phone">Phone Number *</label>
+                    <input type="tel" id="phone" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="teamName">Team Name</label>
+                    <input type="text" id="teamName">
+                </div>
+
+                <div class="form-group">
+                    <label for="additionalInfo">Additional Information</label>
+                    <textarea id="additionalInfo" placeholder="Any special requirements or information..."></textarea>
+                </div>
+
+                <button type="submit" class="submit-btn">
+                    <i class="fas fa-check-circle"></i> Register Now
+                </button>
+            </form>
+
+            <div id="successMessage" class="success-message">
+                <i class="fas fa-check-circle"></i>
+                <h2>Registration Successful!</h2>
+                <p>Thank you for registering. You will receive a confirmation email shortly.</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyCKd_iH-McAMrKI_0YDoYG0xjn2KrQpTOQ",
+            authDomain: "notifyme-events.firebaseapp.com",
+            projectId: "notifyme-events",
+            storageBucket: "notifyme-events.firebasestorage.app",
+            messagingSenderId: "761571632545",
+            appId: "1:761571632545:web:547a7210fdebf366df97e0",
+            measurementId: "G-309BJ6P79V"
+        };
+
+        if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+        }
+
+        const db = firebase.firestore();
+        const eventId = new URLSearchParams(window.location.search).get('eventId');
+
+        if (!eventId) {
+            alert('Invalid registration link');
+            window.location.href = '/';
+        }
+
+        let currentEvent = null;
+
+        async function loadEventDetails() {
+            try {
+                const eventDoc = await db.collection('events').doc(eventId).get();
+                
+                if (!eventDoc.exists) {
+                    showError('Event not found');
+                    return;
+                }
+
+                currentEvent = { id: eventDoc.id, ...eventDoc.data() };
+                displayEventDetails(currentEvent);
+                
+                document.getElementById('loading').classList.remove('active');
+                document.getElementById('eventContent').style.display = 'block';
+            } catch (error) {
+                console.error('Error loading event:', error);
+                showError('Error loading event details');
+            }
+        }
+
+        function displayEventDetails(event) {
+            document.getElementById('eventName').textContent = event.name;
+            document.getElementById('eventDate').textContent = new Date(event.date).toLocaleString();
+            document.getElementById('eventLocation').textContent = event.location;
+            document.getElementById('eventCost').textContent = `₹${event.cost} per team`;
+
+            const maxParticipants = event.teamSize * (event.maxTeams || 10);
+            const currentParticipants = (event.participants || []).length;
+            const spotsLeft = maxParticipants - currentParticipants;
+
+            document.getElementById('spotsRemaining').textContent = 
+                `${spotsLeft} spots remaining out of ${maxParticipants}`;
+
+            if (spotsLeft <= 0) {
+                document.getElementById('registrationForm').innerHTML = 
+                    '<p style="text-align: center; color: #dc3545; font-weight: 600;">This event is full</p>';
+            }
+        }
+
+        function showError(message) {
+            const errorDiv = document.getElementById('errorMessage');
+            errorDiv.textContent = message;
+            errorDiv.classList.add('active');
+        }
+
+        document.getElementById('registrationForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const submitBtn = e.target.querySelector('.submit-btn');
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Registering...';
+
+            try {
+                const eventRef = db.collection('events').doc(eventId);
+                const eventDoc = await eventRef.get();
+                const event = eventDoc.data();
+                const participants = event.participants || [];
+
+                const email = document.getElementById('email').value;
+                
+                if (participants.some(p => p.email === email)) {
+                    showError('This email is already registered for this event');
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = '<i class="fas fa-check-circle"></i> Register Now';
+                    return;
+                }
+
+                const maxParticipants = event.teamSize * (event.maxTeams || 10);
+                if (participants.length >= maxParticipants) {
+                    showError('Event is full');
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = '<i class="fas fa-check-circle"></i> Register Now';
+                    return;
+                }
+
+                const newParticipant = {
+                    name: document.getElementById('fullName').value,
+                    email: email,
+                    phone: document.getElementById('phone').value,
+                    teamName: document.getElementById('teamName').value || 'N/A',
+                    additionalInfo: document.getElementById('additionalInfo').value || '',
+                    registeredAt: new Date().toISOString(),
+                    photoURL: `https://ui-avatars.com/api/?name=${encodeURIComponent(document.getElementById('fullName').value)}`
+                };
+
+                participants.push(newParticipant);
+                await eventRef.update({ participants });
+
+                document.getElementById('registrationForm').style.display = 'none';
+                document.getElementById('successMessage').classList.add('active');
+
+            } catch (error) {
+                console.error('Error registering:', error);
+                showError('Registration failed. Please try again.');
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<i class="fas fa-check-circle"></i> Register Now';
+            }
+        });
+
+        loadEventDetails();
+    </script>
+</body>
+</html>
