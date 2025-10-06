@@ -21,68 +21,16 @@ const auth = firebase.auth();
 const db = firebase.firestore();
 const storage = firebase.storage();
 
-// Enable offline persistence with better error handling and cleanup
-async function initializePersistence() {
-    try {
-        await db.enablePersistence({ synchronizeTabs: true });
-        console.log('Offline persistence enabled');
-    } catch (err) {
-        if (err.code === 'failed-precondition') {
-            console.warn('Multiple tabs open, persistence can only be enabled in one tab at a time.');
-        } else if (err.code === 'unimplemented') {
-            console.warn('The current browser does not support offline persistence');
-        } else if (err.message && err.message.includes('newer version')) {
-            console.warn('Clearing incompatible Firestore cache...');
-            // Clear IndexedDB to resolve version conflicts
-            try {
-                await clearFirestoreCache();
-                // Try persistence again after clearing cache
-                await db.enablePersistence({ synchronizeTabs: true });
-                console.log('Offline persistence enabled after cache clear');
-            } catch (retryErr) {
-                console.warn('Persistence disabled after cache clear:', retryErr.message);
-            }
-        } else {
-            console.warn('Offline persistence error:', err.message);
-        }
-    }
+// Simple persistence setup - no aggressive offline detection
+try {
+    db.enablePersistence({ synchronizeTabs: true })
+        .catch((err) => {
+            // Just log warnings, don't block functionality
+            console.warn('Persistence not enabled:', err.code);
+        });
+} catch (err) {
+    console.warn('Persistence setup failed:', err);
 }
-
-// Clear Firestore IndexedDB cache
-async function clearFirestoreCache() {
-    if ('indexedDB' in window) {
-        try {
-            const dbNames = [
-                'firestore/notifyme-events/(default)',
-                'firestore_v1_notifyme-events_(default)',
-                'firebase-heartbeat-database',
-                'firebase-installations-database'
-            ];
-            
-            for (const dbName of dbNames) {
-                try {
-                    await new Promise((resolve, reject) => {
-                        const deleteReq = indexedDB.deleteDatabase(dbName);
-                        deleteReq.onsuccess = () => resolve();
-                        deleteReq.onerror = () => reject(deleteReq.error);
-                        deleteReq.onblocked = () => {
-                            console.warn(`Deletion of ${dbName} blocked`);
-                            resolve();
-                        };
-                    });
-                    console.log(`Cleared database: ${dbName}`);
-                } catch (dbErr) {
-                    console.warn(`Could not clear ${dbName}:`, dbErr);
-                }
-            }
-        } catch (error) {
-            console.warn('Error clearing Firestore cache:', error);
-        }
-    }
-}
-
-// Initialize persistence
-initializePersistence();
 
 let currentUser = null;
 let isEditMode = false;
@@ -123,12 +71,7 @@ auth.onAuthStateChanged(async (user) => {
     } catch (error) {
         console.error('Error loading profile data:', error);
         
-        // Show appropriate message based on error type
-        if (error.code === 'unavailable') {
-            showToast('Working offline - some data may be outdated', 'info');
-        } else {
-            showToast('Error loading profile data. Please refresh the page.', 'error');
-        }
+        showToast('Error loading profile data. Please refresh the page.', 'error');
         hideLoadingState();
     }
 });

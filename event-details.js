@@ -20,69 +20,16 @@ if (!firebase.apps.length) {
 const auth = firebase.auth();
 const db = firebase.firestore();
 
-// Enable offline persistence with better error handling and cleanup
-async function initializePersistence() {
-    try {
-        await db.enablePersistence({ synchronizeTabs: true });
-        console.log('Offline persistence enabled');
-    } catch (err) {
-        if (err.code === 'failed-precondition') {
-            console.warn('Multiple tabs open, persistence can only be enabled in one tab at a time.');
-        } else if (err.code === 'unimplemented') {
-            console.warn('The current browser does not support offline persistence');
-        } else if (err.message && err.message.includes('newer version')) {
-            console.warn('Clearing incompatible Firestore cache...');
-            // Clear IndexedDB to resolve version conflicts
-            try {
-                await clearFirestoreCache();
-                // Try persistence again after clearing cache
-                await db.enablePersistence({ synchronizeTabs: true });
-                console.log('Offline persistence enabled after cache clear');
-            } catch (retryErr) {
-                console.warn('Persistence disabled after cache clear:', retryErr.message);
-            }
-        } else {
-            console.warn('Offline persistence error:', err.message);
-        }
-    }
+// Simple persistence setup - no aggressive offline detection
+try {
+    db.enablePersistence({ synchronizeTabs: true })
+        .catch((err) => {
+            // Just log warnings, don't block functionality
+            console.warn('Persistence not enabled:', err.code);
+        });
+} catch (err) {
+    console.warn('Persistence setup failed:', err);
 }
-
-// Clear Firestore IndexedDB cache
-async function clearFirestoreCache() {
-    if ('indexedDB' in window) {
-        try {
-            // List of possible Firestore database names
-            const dbNames = [
-                'firestore/notifyme-events/(default)',
-                'firestore_v1_notifyme-events_(default)',
-                'firebase-heartbeat-database',
-                'firebase-installations-database'
-            ];
-            
-            for (const dbName of dbNames) {
-                try {
-                    await new Promise((resolve, reject) => {
-                        const deleteReq = indexedDB.deleteDatabase(dbName);
-                        deleteReq.onsuccess = () => resolve();
-                        deleteReq.onerror = () => reject(deleteReq.error);
-                        deleteReq.onblocked = () => {
-                            console.warn(`Deletion of ${dbName} blocked`);
-                            resolve(); // Continue anyway
-                        };
-                    });
-                    console.log(`Cleared database: ${dbName}`);
-                } catch (dbErr) {
-                    console.warn(`Could not clear ${dbName}:`, dbErr);
-                }
-            }
-        } catch (error) {
-            console.warn('Error clearing Firestore cache:', error);
-        }
-    }
-}
-
-// Initialize persistence
-initializePersistence();
 
 let currentEvent = null;
 let currentUser = null;
@@ -110,13 +57,7 @@ auth.onAuthStateChanged(async (user) => {
         hideLoadingState();
     } catch (error) {
         console.error('Error loading event details:', error);
-        
-        // Handle offline mode gracefully
-        if (error.code === 'unavailable') {
-            showError('Working offline - some data may be outdated');
-        } else {
-            showError('Error loading event details. Please refresh the page.');
-        }
+        showError('Error loading event details. Please refresh the page.');
         hideLoadingState();
     }
 });
@@ -137,15 +78,7 @@ async function loadEventDetails() {
         }
     } catch (error) {
         console.error('Error loading event:', error);
-        
-        // Handle offline mode gracefully
-        if (error.code === 'unavailable') {
-            showError('Working offline - event details unavailable. Please check your connection.');
-            // Show a retry button instead of redirecting
-            showOfflineRetryOption();
-        } else {
-            showError('Error loading event details');
-        }
+        showError('Error loading event details');
         throw error; // Re-throw to be caught by the caller
     }
 }
@@ -481,43 +414,51 @@ function hideLoadingState() {
     });
 }
 
-// Show offline retry option
-function showOfflineRetryOption() {
-    const eventContent = document.querySelector('.event-details-content');
-    if (eventContent) {
-        eventContent.innerHTML = `
-            <div class="error-state">
-                <i class="fas fa-wifi"></i>
-                <h2>Working Offline</h2>
-                <p>Event details cannot be loaded while offline.</p>
-                <p>Please check your internet connection and try again.</p>
-                <button class="retry-btn" onclick="retryLoadEvent()">
-                    <i class="fas fa-redo"></i> Retry
-                </button>
-                <button class="btn-secondary" onclick="window.location.href='dashboard.html'" style="margin-left: 10px;">
-                    <i class="fas fa-arrow-left"></i> Back to Dashboard
-                </button>
-            </div>
-        `;
-    }
+
+// Utility functions for notifications
+function showError(message) {
+    showToast(message, 'error');
 }
 
-// Retry loading event
-window.retryLoadEvent = async function() {
-    showLoadingState();
-    try {
-        await loadEventDetails();
-        hideLoadingState();
-    } catch (error) {
-        console.error('Retry failed:', error);
-        if (error.code === 'unavailable') {
-            showError('Still offline - please check your connection');
-        } else {
-            showError('Error loading event details');
+function showSuccess(message) {
+    showToast(message, 'success');
+}
+
+function showToast(message, type = 'info') {
+    // Remove existing toasts
+    const existingToasts = document.querySelectorAll('.toast');
+    existingToasts.forEach(toast => toast.remove());
+    
+    // Create toast element
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.innerHTML = `
+        <div class="toast-content">
+            <i class="fas ${getToastIcon(type)}"></i>
+            <span>${message}</span>
+        </div>
+        <button class="toast-close" onclick="this.parentElement.remove()">×</button>
+    `;
+    
+    // Add toast to body
+    document.body.appendChild(toast);
+    
+    // Auto remove after 5 seconds
+    setTimeout(() => {
+        if (toast.parentElement) {
+            toast.remove();
         }
-        hideLoadingState();
+    }, 5000);
+}
+
+function getToastIcon(type) {
+    switch (type) {
+        case 'success': return 'fa-check-circle';
+        case 'error': return 'fa-exclamation-circle';
+        case 'warning': return 'fa-exclamation-triangle';
+        default: return 'fa-info-circle';
     }
-};
+}
 
 // Logout
 document.addEventListener('DOMContentLoaded', () => {

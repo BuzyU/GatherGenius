@@ -1,5 +1,5 @@
 :root {
-    --primary-color: lch(62.31% 90.08 52.36);
+    --primary-color: #ff6600;
     --primary-dark: #e55b00;
     --text-color: #333;
     --background-color: #f5f5f5;
@@ -9,7 +9,12 @@
     --warning-color: #ffc107;
     --info-color: #17a2b8;
 }
-
+.content-header {
+    background-color: #e28e55;
+    padding: 24px;
+    border-radius: 16px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
 .settings-content {
     padding: 24px;
     max-width: 1200px;
@@ -18,7 +23,7 @@
 
 /* Settings Section */
 .settings-section {
-    background: white;
+    background: #ffffff;
     border-radius: 16px;
     padding: 32px;
     margin-bottom: 32px;
