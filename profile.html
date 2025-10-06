@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#ff6600">
+    <title>Profile - GatherGenius</title>
+    <link rel="stylesheet" href="dashboard.css">
+    <link rel="stylesheet" href="profile.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <div class="dashboard-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <img src="gatherlogo.jpeg" alt="GatherGenius" class="logo">
+                <button class="menu-toggle">
+                    <i class="fas fa-bars"></i>
+                </button>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="dashboard.html" class="nav-item">
+                    <i class="fas fa-home"></i>
+                    <span>Dashboard</span>
+                </a>
+                <a href="events.html" class="nav-item">
+                    <i class="fas fa-calendar-alt"></i>
+                    <span>Events</span>
+                </a>
+                <a href="#teams" class="nav-item">
+                    <i class="fas fa-users"></i>
+                    <span>Teams</span>
+                </a>
+                <a href="#analytics" class="nav-item">
+                    <i class="fas fa-chart-bar"></i>
+                    <span>Analytics</span>
+                </a>
+                <a href="settings.html" class="nav-item">
+                    <i class="fas fa-cog"></i>
+                    <span>Settings</span>
+                </a>
+            </nav>
+            <button id="logout-btn" class="logout-btn">
+                <i class="fas fa-sign-out-alt"></i>
+                <span>Logout</span>
+            </button>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="content-header">
+                <div class="header-left">
+                    <h1>My Profile</h1>
+                    <p>Manage your personal information and preferences</p>
+                </div>
+                <div class="header-right">
+                    <button class="btn-primary" onclick="toggleEditMode()">
+                        <i class="fas fa-edit"></i>
+                        <span id="edit-btn-text">Edit Profile</span>
+                    </button>
+                </div>
+            </header>
+
+            <div class="profile-content">
+                <!-- Profile Header -->
+                <div class="profile-header">
+                    <div class="profile-avatar-section">
+                        <div class="avatar-container">
+                            <img id="profile-avatar" src="" alt="Profile Picture" class="profile-avatar">
+                            <div class="avatar-overlay" id="avatar-overlay">
+                                <i class="fas fa-camera"></i>
+                                <span>Change Photo</span>
+                            </div>
+                            <input type="file" id="avatar-input" accept="image/*" style="display: none;">
+                        </div>
+                        <div class="profile-basic-info">
+                            <h2 id="profile-name">Loading...</h2>
+                            <p id="profile-email">Loading...</p>
+                            <div class="profile-stats">
+                                <div class="stat-item">
+                                    <span class="stat-number loading-shimmer" id="events-organized">0</span>
+                                    <span class="stat-label">Events Organized</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-number loading-shimmer" id="events-attended">0</span>
+                                    <span class="stat-label">Events Attended</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-number loading-shimmer" id="member-since">0</span>
+                                    <span class="stat-label">Days Active</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Profile Form -->
+                <div class="profile-form-section">
+                    <form id="profile-form" class="profile-form">
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label for="display-name">Display Name</label>
+                                <input type="text" id="display-name" disabled>
+                            </div>
+                            <div class="form-group">
+                                <label for="email">Email Address</label>
+                                <input type="email" id="email" disabled>
+                            </div>
+                            <div class="form-group">
+                                <label for="phone">Phone Number</label>
+                                <input type="tel" id="phone" disabled>
+                            </div>
+                            <div class="form-group">
+                                <label for="organization">Organization</label>
+                                <input type="text" id="organization" disabled>
+                            </div>
+                            <div class="form-group">
+                                <label for="location">Location</label>
+                                <input type="text" id="location" disabled>
+                            </div>
+                            <div class="form-group">
+                                <label for="website">Website</label>
+                                <input type="url" id="website" disabled>
+                            </div>
+                        </div>
+                        <div class="form-group full-width">
+                            <label for="bio">Bio</label>
+                            <textarea id="bio" rows="4" disabled placeholder="Tell us about yourself..."></textarea>
+                        </div>
+                        <div class="form-actions" id="form-actions" style="display: none;">
+                            <button type="button" class="btn-secondary" onclick="cancelEdit()">Cancel</button>
+                            <button type="submit" class="btn-primary">Save Changes</button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Account Security -->
+                <div class="security-section">
+                    <h3>Account Security</h3>
+                    <div class="security-grid">
+                        <div class="security-item">
+                            <div class="security-info">
+                                <h4>Password</h4>
+                                <p>Last changed 30 days ago</p>
+                            </div>
+                            <button class="btn-secondary" onclick="showChangePasswordModal()">
+                                <i class="fas fa-key"></i>
+                                Change Password
+                            </button>
+                        </div>
+                        <div class="security-item">
+                            <div class="security-info">
+                                <h4>Two-Factor Authentication</h4>
+                                <p id="2fa-status">Not enabled</p>
+                            </div>
+                            <button class="btn-secondary" onclick="toggle2FA()">
+                                <i class="fas fa-shield-alt"></i>
+                                <span id="2fa-btn-text">Enable 2FA</span>
+                            </button>
+                        </div>
+                        <div class="security-item">
+                            <div class="security-info">
+                                <h4>Login Sessions</h4>
+                                <p>Manage your active sessions</p>
+                            </div>
+                            <button class="btn-secondary" onclick="showSessionsModal()">
+                                <i class="fas fa-desktop"></i>
+                                View Sessions
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Activity History -->
+                <div class="activity-section">
+                    <h3>Recent Activity</h3>
+                    <div class="activity-list" id="activity-list">
+                        <!-- Activity items will be loaded here -->
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Change Password Modal -->
+    <div id="changePasswordModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Change Password</h2>
+                <button class="close-modal" onclick="closeChangePasswordModal()">&times;</button>
+            </div>
+            <form id="change-password-form">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="current-password">Current Password</label>
+                        <input type="password" id="current-password" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="new-password">New Password</label>
+                        <input type="password" id="new-password" required minlength="6">
+                    </div>
+                    <div class="form-group">
+                        <label for="confirm-password">Confirm New Password</label>
+                        <input type="password" id="confirm-password" required>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-secondary" onclick="closeChangePasswordModal()">Cancel</button>
+                    <button type="submit" class="btn-primary">Change Password</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Sessions Modal -->
+    <div id="sessionsModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Active Sessions</h2>
+                <button class="close-modal" onclick="closeSessionsModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="sessions-list">
+                    <!-- Sessions will be loaded here -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-danger" onclick="terminateAllSessions()">Terminate All Other Sessions</button>
+                <button type="button" class="btn-secondary" onclick="closeSessionsModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase v8 Scripts -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-storage.js"></script>
+    <script src="profile.js"></script>
+</body>
+</html>

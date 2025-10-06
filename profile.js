@@ -1,0 +1,743 @@
+// Firebase configuration
+const firebaseConfig = {
+    apiKey: "AIzaSyCKd_iH-McAMrKI_0YDoYG0xjn2KrQpTOQ",
+    authDomain: "notifyme-events.firebaseapp.com",
+    projectId: "notifyme-events",
+    storageBucket: "notifyme-events.firebasestorage.app",
+    messagingSenderId: "761571632545",
+    appId: "1:761571632545:web:547a7210fdebf366df97e0",
+    measurementId: "G-309BJ6P79V"
+};
+
+// Initialize Firebase only once
+let app;
+if (!firebase.apps.length) {
+    app = firebase.initializeApp(firebaseConfig);
+} else {
+    app = firebase.app();
+}
+
+const auth = firebase.auth();
+const db = firebase.firestore();
+const storage = firebase.storage();
+
+// Enable offline persistence with better error handling and cleanup
+async function initializePersistence() {
+    try {
+        await db.enablePersistence({ synchronizeTabs: true });
+        console.log('Offline persistence enabled');
+    } catch (err) {
+        if (err.code === 'failed-precondition') {
+            console.warn('Multiple tabs open, persistence can only be enabled in one tab at a time.');
+        } else if (err.code === 'unimplemented') {
+            console.warn('The current browser does not support offline persistence');
+        } else if (err.message && err.message.includes('newer version')) {
+            console.warn('Clearing incompatible Firestore cache...');
+            // Clear IndexedDB to resolve version conflicts
+            try {
+                await clearFirestoreCache();
+                // Try persistence again after clearing cache
+                await db.enablePersistence({ synchronizeTabs: true });
+                console.log('Offline persistence enabled after cache clear');
+            } catch (retryErr) {
+                console.warn('Persistence disabled after cache clear:', retryErr.message);
+            }
+        } else {
+            console.warn('Offline persistence error:', err.message);
+        }
+    }
+}
+
+// Clear Firestore IndexedDB cache
+async function clearFirestoreCache() {
+    if ('indexedDB' in window) {
+        try {
+            const dbNames = [
+                'firestore/notifyme-events/(default)',
+                'firestore_v1_notifyme-events_(default)',
+                'firebase-heartbeat-database',
+                'firebase-installations-database'
+            ];
+            
+            for (const dbName of dbNames) {
+                try {
+                    await new Promise((resolve, reject) => {
+                        const deleteReq = indexedDB.deleteDatabase(dbName);
+                        deleteReq.onsuccess = () => resolve();
+                        deleteReq.onerror = () => reject(deleteReq.error);
+                        deleteReq.onblocked = () => {
+                            console.warn(`Deletion of ${dbName} blocked`);
+                            resolve();
+                        };
+                    });
+                    console.log(`Cleared database: ${dbName}`);
+                } catch (dbErr) {
+                    console.warn(`Could not clear ${dbName}:`, dbErr);
+                }
+            }
+        } catch (error) {
+            console.warn('Error clearing Firestore cache:', error);
+        }
+    }
+}
+
+// Initialize persistence
+initializePersistence();
+
+let currentUser = null;
+let isEditMode = false;
+let originalProfileData = {};
+
+// Check authentication
+auth.onAuthStateChanged(async (user) => {
+    if (!user) {
+        window.location.href = 'login.html';
+        return;
+    }
+    
+    currentUser = user;
+    
+    // Show loading state
+    showLoadingState();
+    
+    try {
+        // Initialize user profile if it doesn't exist
+        await initializeUserProfile();
+        
+        // Load all profile data with individual error handling
+        const results = await Promise.allSettled([
+            loadUserProfile(),
+            loadUserStats(),
+            loadUserActivity()
+        ]);
+        
+        // Check if any critical functions failed
+        const failures = results.filter(result => result.status === 'rejected');
+        if (failures.length > 0) {
+            console.warn('Some profile data failed to load:', failures);
+            showToast('Some data may be outdated (offline mode)', 'warning');
+        }
+        
+        // Hide loading state
+        hideLoadingState();
+    } catch (error) {
+        console.error('Error loading profile data:', error);
+        
+        // Show appropriate message based on error type
+        if (error.code === 'unavailable') {
+            showToast('Working offline - some data may be outdated', 'info');
+        } else {
+            showToast('Error loading profile data. Please refresh the page.', 'error');
+        }
+        hideLoadingState();
+    }
+});
+
+// Load user profile data
+async function loadUserProfile() {
+    try {
+        // Load from Firestore user profile collection
+        const userDoc = await db.collection('users').doc(currentUser.uid).get();
+        let userData = {};
+        
+        if (userDoc.exists) {
+            userData = userDoc.data();
+        }
+
+        // Merge with Firebase Auth data
+        const profileData = {
+            displayName: userData.displayName || currentUser.displayName || '',
+            email: currentUser.email || '',
+            phone: userData.phone || '',
+            organization: userData.organization || '',
+            location: userData.location || '',
+            website: userData.website || '',
+            bio: userData.bio || '',
+            photoURL: userData.photoURL || currentUser.photoURL || generateAvatarUrl(currentUser.displayName || currentUser.email)
+        };
+
+        // Store original data for cancel functionality
+        originalProfileData = { ...profileData };
+
+        // Update UI
+        updateProfileUI(profileData);
+    } catch (error) {
+        console.error('Error loading profile:', error);
+        
+        // Handle offline mode gracefully
+        if (error.code === 'unavailable') {
+            // Use Firebase Auth data as fallback
+            const fallbackData = {
+                displayName: currentUser.displayName || '',
+                email: currentUser.email || '',
+                phone: '',
+                organization: '',
+                location: '',
+                website: '',
+                bio: '',
+                photoURL: currentUser.photoURL || generateAvatarUrl(currentUser.displayName || currentUser.email)
+            };
+            updateProfileUI(fallbackData);
+            originalProfileData = { ...fallbackData };
+        } else {
+            showToast('Error loading profile data', 'error');
+        }
+    }
+}
+
+// Update profile UI
+function updateProfileUI(data) {
+    document.getElementById('profile-name').textContent = data.displayName || 'User';
+    document.getElementById('profile-email').textContent = data.email;
+    document.getElementById('profile-avatar').src = data.photoURL;
+    
+    // Form fields
+    document.getElementById('display-name').value = data.displayName;
+    document.getElementById('email').value = data.email;
+    document.getElementById('phone').value = data.phone;
+    document.getElementById('organization').value = data.organization;
+    document.getElementById('location').value = data.location;
+    document.getElementById('website').value = data.website;
+    document.getElementById('bio').value = data.bio;
+}
+
+// Load user statistics
+async function loadUserStats() {
+    try {
+        // Get all events first
+        const allEventsSnapshot = await db.collection('events').get();
+        const allEvents = [];
+        allEventsSnapshot.forEach(doc => {
+            allEvents.push({ id: doc.id, ...doc.data() });
+        });
+
+        // Calculate statistics
+        const organizedEvents = allEvents.filter(event => event.createdBy === currentUser.uid);
+        const attendedEvents = allEvents.filter(event => 
+            event.participants && event.participants.some(p => p.uid === currentUser.uid)
+        );
+
+        // Calculate days since account creation
+        const creationTime = new Date(currentUser.metadata.creationTime);
+        const daysSinceCreation = Math.floor((new Date() - creationTime) / (1000 * 60 * 60 * 24));
+
+        // Update stats with animation
+        animateCounter('events-organized', organizedEvents.length);
+        animateCounter('events-attended', attendedEvents.length);
+        animateCounter('member-since', daysSinceCreation);
+
+        return {
+            organized: organizedEvents.length,
+            attended: attendedEvents.length,
+            daysSince: daysSinceCreation,
+            allEvents: allEvents
+        };
+    } catch (error) {
+        console.error('Error loading stats:', error);
+        
+        // Handle offline mode gracefully
+        if (error.code === 'unavailable') {
+            console.warn('Stats unavailable in offline mode');
+            // Show basic stats from account creation
+            const creationTime = new Date(currentUser.metadata.creationTime);
+            const daysSinceCreation = Math.floor((new Date() - creationTime) / (1000 * 60 * 60 * 24));
+            
+            animateCounter('events-organized', 0);
+            animateCounter('events-attended', 0);
+            animateCounter('member-since', daysSinceCreation);
+            
+            return { organized: 0, attended: 0, daysSince: daysSinceCreation, allEvents: [] };
+        } else {
+            showToast('Error loading statistics', 'error');
+            return { organized: 0, attended: 0, daysSince: 0, allEvents: [] };
+        }
+    }
+}
+
+// Load user activity
+async function loadUserActivity() {
+    try {
+        const activities = [];
+        
+        // Get recent events organized with proper error handling
+        try {
+            const recentEventsQuery = db.collection('events')
+                .where('createdBy', '==', currentUser.uid)
+                .orderBy('createdAt', 'desc')
+                .limit(10);
+            
+            const recentEvents = await recentEventsQuery.get();
+
+            recentEvents.forEach(doc => {
+                const event = doc.data();
+                const eventDate = event.date ? new Date(event.date) : new Date();
+                const createdDate = event.createdAt ? 
+                    (event.createdAt.toDate ? event.createdAt.toDate() : new Date(event.createdAt)) : 
+                    new Date();
+
+                activities.push({
+                    type: 'event',
+                    title: `Created event "${event.name}"`,
+                    description: `Event scheduled for ${eventDate.toLocaleDateString()}`,
+                    time: createdDate,
+                    icon: 'fas fa-calendar-plus'
+                });
+            });
+        } catch (eventError) {
+            console.warn('Could not load events for activity (may not have createdAt index):', eventError);
+            
+            // Fallback: Get events without ordering
+            const allEvents = await db.collection('events')
+                .where('createdBy', '==', currentUser.uid)
+                .limit(5)
+                .get();
+                
+            allEvents.forEach(doc => {
+                const event = doc.data();
+                activities.push({
+                    type: 'event',
+                    title: `Created event "${event.name}"`,
+                    description: `Event scheduled for ${new Date(event.date).toLocaleDateString()}`,
+                    time: new Date(event.date),
+                    icon: 'fas fa-calendar-plus'
+                });
+            });
+        }
+
+        // Get user profile updates from Firestore
+        try {
+            const userDoc = await db.collection('users').doc(currentUser.uid).get();
+            if (userDoc.exists) {
+                const userData = userDoc.data();
+                if (userData.updatedAt) {
+                    const updateTime = userData.updatedAt.toDate ? userData.updatedAt.toDate() : new Date(userData.updatedAt);
+                    activities.push({
+                        type: 'profile',
+                        title: 'Profile updated',
+                        description: 'Updated profile information',
+                        time: updateTime,
+                        icon: 'fas fa-user-edit'
+                    });
+                }
+            }
+        } catch (profileError) {
+            console.warn('Could not load profile update activity:', profileError);
+        }
+
+        // Add account creation activity
+        if (currentUser.metadata && currentUser.metadata.creationTime) {
+            activities.push({
+                type: 'security',
+                title: 'Account created',
+                description: 'Welcome to GatherGenius!',
+                time: new Date(currentUser.metadata.creationTime),
+                icon: 'fas fa-user-plus'
+            });
+        }
+
+        // Sort by time (newest first)
+        activities.sort((a, b) => b.time - a.time);
+
+        // Display activities
+        displayActivities(activities.slice(0, 10));
+        
+        return activities;
+    } catch (error) {
+        console.error('Error loading activity:', error);
+        showToast('Error loading activity history', 'warning');
+        
+        // Display empty state
+        displayActivities([]);
+        return [];
+    }
+}
+
+// Display activities
+function displayActivities(activities) {
+    const activityList = document.getElementById('activity-list');
+    
+    if (activities.length === 0) {
+        activityList.innerHTML = '<p style="text-align: center; color: #6c757d;">No recent activity</p>';
+        return;
+    }
+
+    activityList.innerHTML = activities.map(activity => `
+        <div class="activity-item">
+            <div class="activity-icon ${activity.type}">
+                <i class="${activity.icon}"></i>
+            </div>
+            <div class="activity-content">
+                <h4>${activity.title}</h4>
+                <p>${activity.description}</p>
+            </div>
+            <div class="activity-time">
+                ${formatTimeAgo(activity.time)}
+            </div>
+        </div>
+    `).join('');
+}
+
+// Toggle edit mode
+window.toggleEditMode = function() {
+    isEditMode = !isEditMode;
+    const formInputs = document.querySelectorAll('#profile-form input, #profile-form textarea');
+    const editBtn = document.getElementById('edit-btn-text');
+    const formActions = document.getElementById('form-actions');
+    const avatarOverlay = document.getElementById('avatar-overlay');
+
+    if (isEditMode) {
+        formInputs.forEach(input => {
+            if (input.id !== 'email') { // Email should remain disabled
+                input.disabled = false;
+            }
+        });
+        editBtn.textContent = 'Cancel Edit';
+        formActions.style.display = 'flex';
+        avatarOverlay.style.display = 'flex';
+    } else {
+        formInputs.forEach(input => input.disabled = true);
+        editBtn.textContent = 'Edit Profile';
+        formActions.style.display = 'none';
+        avatarOverlay.style.display = 'none';
+        // Restore original data
+        updateProfileUI(originalProfileData);
+    }
+};
+
+// Cancel edit
+window.cancelEdit = function() {
+    toggleEditMode();
+};
+
+// Handle profile form submission
+document.getElementById('profile-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    try {
+        const formData = new FormData(e.target);
+        const updatedData = {
+            displayName: document.getElementById('display-name').value,
+            phone: document.getElementById('phone').value,
+            organization: document.getElementById('organization').value,
+            location: document.getElementById('location').value,
+            website: document.getElementById('website').value,
+            bio: document.getElementById('bio').value,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        };
+
+        // Update Firestore
+        await db.collection('users').doc(currentUser.uid).set(updatedData, { merge: true });
+
+        // Update Firebase Auth profile
+        await currentUser.updateProfile({
+            displayName: updatedData.displayName
+        });
+
+        // Update original data
+        originalProfileData = { ...originalProfileData, ...updatedData };
+        
+        showToast('Profile updated successfully!', 'success');
+        toggleEditMode();
+        loadUserProfile(); // Reload to show updated data
+    } catch (error) {
+        console.error('Error updating profile:', error);
+        showToast('Error updating profile', 'error');
+    }
+});
+
+// Handle avatar upload
+document.getElementById('avatar-overlay').addEventListener('click', () => {
+    if (isEditMode) {
+        document.getElementById('avatar-input').click();
+    }
+});
+
+document.getElementById('avatar-input').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    // Validate file
+    if (!file.type.startsWith('image/')) {
+        showToast('Please select an image file', 'error');
+        return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) { // 5MB limit
+        showToast('Image size must be less than 5MB', 'error');
+        return;
+    }
+
+    try {
+        showToast('Uploading image...', 'info');
+        
+        // Upload to Firebase Storage
+        const storageRef = storage.ref(`avatars/${currentUser.uid}/${Date.now()}_${file.name}`);
+        const snapshot = await storageRef.put(file);
+        const downloadURL = await snapshot.ref.getDownloadURL();
+
+        // Update profile
+        await currentUser.updateProfile({ photoURL: downloadURL });
+        await db.collection('users').doc(currentUser.uid).update({
+            photoURL: downloadURL,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+
+        // Update UI
+        document.getElementById('profile-avatar').src = downloadURL;
+        originalProfileData.photoURL = downloadURL;
+        
+        showToast('Profile picture updated!', 'success');
+    } catch (error) {
+        console.error('Error uploading avatar:', error);
+        showToast('Error uploading image', 'error');
+    }
+});
+
+// Change password modal
+window.showChangePasswordModal = function() {
+    document.getElementById('changePasswordModal').classList.add('show');
+};
+
+window.closeChangePasswordModal = function() {
+    document.getElementById('changePasswordModal').classList.remove('show');
+    document.getElementById('change-password-form').reset();
+};
+
+// Handle password change
+document.getElementById('change-password-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const currentPassword = document.getElementById('current-password').value;
+    const newPassword = document.getElementById('new-password').value;
+    const confirmPassword = document.getElementById('confirm-password').value;
+
+    if (newPassword !== confirmPassword) {
+        showToast('New passwords do not match', 'error');
+        return;
+    }
+
+    try {
+        // Re-authenticate user
+        const credential = firebase.auth.EmailAuthProvider.credential(
+            currentUser.email,
+            currentPassword
+        );
+        await currentUser.reauthenticateWithCredential(credential);
+
+        // Update password
+        await currentUser.updatePassword(newPassword);
+        
+        showToast('Password updated successfully!', 'success');
+        closeChangePasswordModal();
+    } catch (error) {
+        console.error('Error changing password:', error);
+        if (error.code === 'auth/wrong-password') {
+            showToast('Current password is incorrect', 'error');
+        } else {
+            showToast('Error changing password', 'error');
+        }
+    }
+});
+
+// Sessions modal
+window.showSessionsModal = function() {
+    loadSessions();
+    document.getElementById('sessionsModal').classList.add('show');
+};
+
+window.closeSessionsModal = function() {
+    document.getElementById('sessionsModal').classList.remove('show');
+};
+
+// Load sessions (simulated)
+function loadSessions() {
+    const sessionsList = document.getElementById('sessions-list');
+    const sessions = [
+        {
+            device: 'Windows PC - Chrome',
+            location: 'Mumbai, India',
+            lastActive: new Date(),
+            current: true
+        },
+        {
+            device: 'iPhone - Safari',
+            location: 'Mumbai, India',
+            lastActive: new Date(Date.now() - 2 * 60 * 60 * 1000),
+            current: false
+        }
+    ];
+
+    sessionsList.innerHTML = sessions.map(session => `
+        <div class="session-item ${session.current ? 'session-current' : ''}">
+            <div class="session-info">
+                <h4>${session.device} ${session.current ? '(Current)' : ''}</h4>
+                <p>${session.location} • Last active ${formatTimeAgo(session.lastActive)}</p>
+            </div>
+            ${!session.current ? '<button class="btn-danger btn-sm" onclick="terminateSession()">Terminate</button>' : ''}
+        </div>
+    `).join('');
+}
+
+// Terminate session (simulated)
+window.terminateSession = function() {
+    showToast('Session terminated', 'success');
+    loadSessions();
+};
+
+window.terminateAllSessions = function() {
+    if (confirm('This will sign you out of all other devices. Continue?')) {
+        showToast('All other sessions terminated', 'success');
+        loadSessions();
+    }
+};
+
+// 2FA toggle (simulated)
+window.toggle2FA = function() {
+    const status = document.getElementById('2fa-status');
+    const btnText = document.getElementById('2fa-btn-text');
+    
+    if (status.textContent === 'Not enabled') {
+        status.textContent = 'Enabled';
+        btnText.textContent = 'Disable 2FA';
+        showToast('Two-factor authentication enabled', 'success');
+    } else {
+        status.textContent = 'Not enabled';
+        btnText.textContent = 'Enable 2FA';
+        showToast('Two-factor authentication disabled', 'warning');
+    }
+};
+
+// Utility functions
+function generateAvatarUrl(name) {
+    return `https://ui-avatars.com/api/?name=${encodeURIComponent(name || 'User')}&background=ff6600&color=fff&size=120`;
+}
+
+function formatTimeAgo(date) {
+    const now = new Date();
+    const diffInSeconds = Math.floor((now - date) / 1000);
+    
+    if (diffInSeconds < 60) return 'Just now';
+    if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`;
+    if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`;
+    return `${Math.floor(diffInSeconds / 86400)}d ago`;
+}
+
+function showToast(message, type = 'info') {
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+        toast.remove();
+    }, 3000);
+}
+
+// Logout functionality
+document.getElementById('logout-btn').addEventListener('click', async () => {
+    try {
+        await auth.signOut();
+        window.location.href = 'login.html';
+    } catch (error) {
+        console.error('Error signing out:', error);
+        showToast('Error signing out', 'error');
+    }
+});
+
+// Initialize user profile collection if it doesn't exist
+async function initializeUserProfile() {
+    try {
+        const userDoc = await db.collection('users').doc(currentUser.uid).get();
+        if (!userDoc.exists) {
+            await db.collection('users').doc(currentUser.uid).set({
+                displayName: currentUser.displayName || '',
+                email: currentUser.email,
+                photoURL: currentUser.photoURL || generateAvatarUrl(currentUser.displayName || currentUser.email),
+                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+        }
+    } catch (error) {
+        console.error('Error initializing user profile:', error);
+    }
+}
+
+// Show loading state
+function showLoadingState() {
+    const loadingElements = [
+        'profile-name', 'profile-email', 'events-organized', 
+        'events-attended', 'member-since'
+    ];
+    
+    loadingElements.forEach(id => {
+        const element = document.getElementById(id);
+        if (element) {
+            element.textContent = 'Loading...';
+            element.classList.add('loading');
+        }
+    });
+}
+
+// Hide loading state
+function hideLoadingState() {
+    const loadingElements = document.querySelectorAll('.loading');
+    loadingElements.forEach(element => {
+        element.classList.remove('loading');
+    });
+}
+
+// Animate counter
+function animateCounter(elementId, targetValue) {
+    const element = document.getElementById(elementId);
+    if (!element) return;
+    
+    const startValue = 0;
+    const duration = 1000; // 1 second
+    const startTime = Date.now();
+    
+    function updateCounter() {
+        const elapsed = Date.now() - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        const currentValue = Math.floor(startValue + (targetValue - startValue) * progress);
+        
+        element.textContent = currentValue;
+        
+        if (progress < 1) {
+            requestAnimationFrame(updateCounter);
+        }
+    }
+    
+    updateCounter();
+}
+
+// Initialize user profile collection if it doesn't exist
+async function initializeUserProfile() {
+    try {
+        const userDoc = await db.collection('users').doc(currentUser.uid).get();
+        if (!userDoc.exists) {
+            const userData = {
+                displayName: currentUser.displayName || '',
+                email: currentUser.email,
+                photoURL: currentUser.photoURL || generateAvatarUrl(currentUser.displayName || currentUser.email),
+                phone: '',
+                organization: '',
+                location: '',
+                website: '',
+                bio: '',
+                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            };
+            
+            await db.collection('users').doc(currentUser.uid).set(userData);
+            console.log('User profile initialized');
+        }
+    } catch (error) {
+        if (error.code === 'unavailable') {
+            console.warn('Offline mode: Using cached data or defaults');
+            // Don't throw error for offline mode
+            return;
+        }
+        console.error('Error initializing user profile:', error);
+        // Don't throw error to prevent blocking the UI
+    }
+}
