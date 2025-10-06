@@ -48,11 +48,7 @@ body {
     position: fixed;
     height: 100vh;
     transition: transform 0.3s ease;
-}
-
-.sidebar-header {
-    display: flex;
-    align-items: center;
+    transform: translateX(0);
     justify-content: space-between;
     padding-bottom: 20px;
     border-bottom: 1px solid var(--border-color);
@@ -405,31 +401,75 @@ body {
     gap: 20px;
 }
 
-/* Responsive Design */
-@media (max-width: 1024px) {
+/* Default (Desktop / Large Screens) */
+:root {
+    --sidebar-width: 250px;
+}
+
+/* Sidebar Layout */
+.sidebar {
+    width: var(--sidebar-width);
+    position: fixed;
+    left: 0;
+    top: 0;
+    height: 100vh;
+    background: #fff;
+    transition: all 0.3s ease;
+    overflow-y: auto;
+}
+
+.main-content {
+    margin-left: var(--sidebar-width);
+    transition: all 0.3s ease;
+}
+
+/* Mobile Menu Toggle Button (Hidden by default) */
+.menu-toggle {
+    display: none;
+    position: absolute;
+    top: 15px;
+    left: 15px;
+    font-size: 1.5rem;
+    cursor: pointer;
+}
+
+/* ========================= */
+/* Tablet / Medium Screens   */
+/* ========================= */
+@media (max-width: 1200px) {
     :root {
-        --sidebar-width: 80px;
+        --sidebar-width: 200px;
+    }
+}
+
+/* ========================= */
+/* Small Laptops / Large Tablets */
+/* ========================= */
+@media (max-width: 992px) {
+    :root {
+        --sidebar-width: 150px;
     }
 
     .sidebar {
         align-items: center;
     }
 
-    .logo {
-        display: none;
-    }
-
     .nav-item span,
-    .logout-btn span {
+    .logout-btn span,
+    .logo {
         display: none;
     }
 
     .nav-item svg,
     .logout-btn svg {
-        margin-right: 0;
+        margin: 0 auto;
+        display: block;
     }
 }
 
+/* ========================= */
+/* Tablets / Mobiles         */
+/* ========================= */
 @media (max-width: 768px) {
     :root {
         --sidebar-width: 0;
@@ -437,40 +477,41 @@ body {
 
     .sidebar {
         transform: translateX(-100%);
+        width: 250px;
         z-index: 1000;
     }
 
     .sidebar.show {
         transform: translateX(0);
-        width: 280px;
     }
 
     .menu-toggle {
         display: block;
     }
 
-    .logo {
-        display: block;
-    }
-
-    .nav-item span,
-    .logout-btn span {
-        display: inline;
-    }
-
-    .nav-item svg,
-    .logout-btn svg {
-        margin-right: 12px;
-    }
-
     .main-content {
         margin-left: 0;
     }
+}
 
-    .search-box {
-        display: none;
+/* ========================= */
+/* Extra Small Devices       */
+/* ========================= */
+@media (max-width: 480px) {
+    .sidebar {
+        width: 220px;
+    }
+
+    .nav-item svg {
+        margin-right: 10px;
+    }
+
+    .nav-item span {
+        display: inline;
+        font-size: 0.9rem;
     }
 }
+
 /* Modal Styles - Add these to dashboard.css */
 
 /* Modal Container */
@@ -1453,129 +1494,7 @@ body {
     .section-header h2 {
         font-size: 1.1rem;
     }
-
-    /* Events Grid Mobile */
-    .events-grid {
-        grid-template-columns: 1fr;
-        gap: 15px;
-    }
-
-    .event-card {
-        padding: 15px;
-    }
-
-    .event-title {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 8px;
-    }
-
-    .event-title h3 {
-        font-size: 1.1rem;
-    }
-
-    .event-actions {
-        flex-direction: column;
-    }
-
-    .event-actions button {
-        width: 100%;
-    }
-
-    /* Modal Mobile */
-    .modal-content {
-        width: 95%;
-        max-height: 95vh;
-        margin: 10px;
-    }
-
-    .modal-header {
-        padding: 15px;
-    }
-
-    .modal-header h2 {
-        font-size: 1.3rem;
-    }
-
-    #createEventForm .form-group {
-        padding: 0 15px;
-        margin-bottom: 15px;
-    }
-
-    #createEventForm .form-group:first-of-type {
-        padding-top: 15px;
-    }
-
-    .form-actions {
-        flex-direction: column-reverse;
-        padding: 15px;
-        gap: 10px;
-    }
-
-    .form-actions button {
-        width: 100%;
-    }
-
-    /* Toast Mobile */
-    .toast {
-        right: 10px;
-        left: 10px;
-        bottom: 20px;
-        min-width: auto;
-    }
-
-    /* Events Page Filters Mobile */
-    .events-container {
-        padding: 0;
-    }
-
-    .events-header {
-        flex-direction: column;
-        align-items: stretch;
-        gap: 15px;
-        padding: 15px;
-        background: var(--surface-color);
-        margin-bottom: 15px;
-    }
-
-    .events-filters {
-        flex-direction: column;
-        width: 100%;
-        gap: 10px;
-    }
-
-    .filter-group {
-        width: 100%;
-        flex-direction: column;
-        align-items: stretch;
-    }
-
-    .filter-group select {
-        width: 100%;
-    }
 }
-
-/* ========================================
-   SMALL MOBILE (max-width: 480px)
-   ======================================== */
-
-@media (max-width: 480px) {
-    .header-left h1 {
-        font-size: 1.3rem;
-    }
-
-    .stat-card {
-        flex-direction: column;
-        align-items: flex-start;
-    }
-
-    .stat-icon {
-        margin-bottom: 10px;
-    }
-
-    .actions-grid {
-        grid-template-columns: 1fr;
-    }
 
     .event-title h3 {
         font-size: 1rem;
@@ -1597,7 +1516,7 @@ body {
     #createEventForm .form-group textarea {
         font-size: 16px; /* Prevents zoom on iOS */
     }
-}
+
 
 /* ========================================
    LANDSCAPE MOBILE
@@ -1651,20 +1570,27 @@ body {
 }
 
 /* ========================================
-   ACCESSIBILITY IMPROVEMENTS
+   RESPONSIVE SIDEBAR NAVIGATION
    ======================================== */
 
-@media (prefers-reduced-motion: reduce) {
-    * {
-        animation-duration: 0.01ms !important;
-        animation-iteration-count: 1 !important;
+/* Mobile overlay for sidebar */
+.sidebar-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 999;
+    opacity: 0;
+    transition: opacity 0.3s ease;
         transition-duration: 0.01ms !important;
-    }
 }
 
-/* Focus visible for keyboard navigation */
-*:focus-visible {
-    outline: 2px solid var(--primary-color);
+.sidebar-overlay.show {
+    display: block;
+    opacity: 1;
     outline-offset: 2px;
 }
 
