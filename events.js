@@ -180,6 +180,21 @@ function displayEvents(events) {
     }).join('');
 }
 
+window.deleteEvent = async function(id) {
+    if (!confirm('Are you sure you want to delete this event? This action cannot be undone.')) {
+        return;
+    }
+    
+    try {
+        await db.collection('events').doc(id).delete();
+        showSuccess('Event deleted successfully');
+        await loadDashboardData();
+    } catch (error) {
+        console.error('Error deleting event:', error);
+        showError('Error deleting event. Please try again.');
+    }
+};
+
 // Add event listeners for filters and search
 document.addEventListener('DOMContentLoaded', () => {
     const statusFilter = document.getElementById('status-filter');
