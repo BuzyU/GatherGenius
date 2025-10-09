@@ -213,13 +213,28 @@ window.deleteEvent = async function (id) {
     try {
         await db.collection('events').doc(id).delete();
         showSuccess('Event deleted successfully');
-        location.reload(); // ✅ Reloads the page after deletion
+        location.reload();
     } catch (error) {
         console.error('Error deleting event:', error);
         showError('Error deleting event. Please try again.');
     }
 };
 
+// ================= LOGOUT FUNCTIONALITY =================
+// Unified logout function that works for both buttons
+async function handleLogout() {
+    try {
+        console.log('Logging out...');
+        await auth.signOut();
+        // Clear session storage
+        sessionStorage.clear();
+        console.log('Logout successful');
+        window.location.href = 'login.html';
+    } catch (error) {
+        console.error('Error signing out:', error);
+        showError('Error signing out. Please try again.');
+    }
+}
 
 // Global close sidebar function (accessible from HTML onclick)
 window.closeSidebar = function () {
@@ -353,30 +368,52 @@ function initializeDropdowns() {
             });
         });
     }
+}
 
-    // Handle logout from dropdown
-    const logoutLink = document.getElementById('logout-btn');
-    if (logoutLink) {
-        logoutLink.addEventListener('click', async (e) => {
+// Initialize logout buttons
+function initializeLogoutButtons() {
+    // Sidebar logout button
+    const sidebarLogoutBtn = document.getElementById('logout-btn');
+    if (sidebarLogoutBtn) {
+        sidebarLogoutBtn.addEventListener('click', async (e) => {
             e.preventDefault();
-            try {
-                await auth.signOut();
-                window.location.href = 'login.html';
-            } catch (error) {
-                console.error('Error signing out:', error);
-                showError('Error signing out. Please try again.');
-            }
+            await handleLogout();
         });
+        console.log('Sidebar logout button initialized');
     }
+
+    // Dropdown logout link
+    const dropdownLogoutLink = document.getElementById('logout-link');
+    if (dropdownLogoutLink) {
+        dropdownLogoutLink.addEventListener('click', async (e) => {
+            e.preventDefault();
+            await handleLogout();
+        });
+        console.log('Dropdown logout link initialized');
+    }
+
+    // Also handle any other logout buttons with class 'logout-btn'
+    const allLogoutBtns = document.querySelectorAll('.logout-btn, .logout-link, [data-logout]');
+    allLogoutBtns.forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            e.preventDefault();
+            await handleLogout();
+        });
+    });
 }
 
 // Handle create event form submission
 document.addEventListener('DOMContentLoaded', () => {
+    console.log('DOM Content Loaded - Initializing...');
+    
     // Initialize sidebar toggle functionality
     initializeSidebar();
 
     // Initialize dropdown functionality
     initializeDropdowns();
+
+    // Initialize logout buttons - THIS IS THE KEY FIX
+    initializeLogoutButtons();
 
     const createEventForm = document.getElementById('createEventForm');
     if (createEventForm) {
@@ -440,6 +477,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (closeBtn) {
         closeBtn.addEventListener('click', closeCreateEventModal);
     }
+
+    console.log('All initializations complete');
 });
 
 // Toast notification functions
@@ -474,11 +513,8 @@ function showToast(message, type = 'info') {
         setTimeout(() => toast.remove(), 300);
     }, 3000);
 }
-// ========================================
-// MOBILE MENU FUNCTIONALITY
-// Add this to your dashboard.js or events.js
-// ========================================
 
+// MOBILE MENU FUNCTIONALITY
 document.addEventListener('DOMContentLoaded', () => {
     // Mobile Menu Toggle
     const menuToggle = document.querySelector('.menu-toggle');
@@ -639,86 +675,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Improve form input experience on mobile
-    const inputs = document.querySelectorAll('input, textarea');
-    inputs.forEach(input => {
-        // Auto-focus first input when modal opens (desktop only)
-        if (window.innerWidth > 768) {
-            const modal = input.closest('.modal');
-            if (modal) {
-                const observer = new MutationObserver((mutations) => {
-                    mutations.forEach((mutation) => {
-                        if (modal.style.display === 'flex') {
-                            setTimeout(() => input.focus(), 100);
-                        }
-                    });
-                });
-                observer.observe(modal, {
-                    attributes: true,
-                    attributeFilter: ['style']
-                });
-            }
-        }
-
-        // Scroll input into view on mobile when focused
-        if (window.innerWidth <= 768) {
-            input.addEventListener('focus', () => {
-                setTimeout(() => {
-                    input.scrollIntoView({
-                        behavior: 'smooth',
-                        block: 'center'
-                    });
-                }, 300);
-            });
-        }
-    });
-
-    // Optimize card interactions for mobile
-    const eventCards = document.querySelectorAll('.event-card');
-    eventCards.forEach(card => {
-        let touchStartY = 0;
-        let touchEndY = 0;
-
-        card.addEventListener('touchstart', (e) => {
-            touchStartY = e.changedTouches[0].screenY;
-        }, { passive: true });
-
-        card.addEventListener('touchend', (e) => {
-            touchEndY = e.changedTouches[0].screenY;
-            // If it's a tap (not a scroll), add visual feedback
-            if (Math.abs(touchEndY - touchStartY) < 10) {
-                card.style.transform = 'scale(0.98)';
-                setTimeout(() => {
-                    card.style.transform = '';
-                }, 100);
-            }
-        }, { passive: true });
-    });
-
-    // Add pull-to-refresh hint on mobile (optional)
-    if (window.innerWidth <= 768 && 'ontouchstart' in window) {
-        let startY = 0;
-        let currentY = 0;
-
-        mainContent.addEventListener('touchstart', (e) => {
-            if (mainContent.scrollTop === 0) {
-                startY = e.touches[0].pageY;
-            }
-        }, { passive: true });
-
-        mainContent.addEventListener('touchmove', (e) => {
-            if (mainContent.scrollTop === 0) {
-                currentY = e.touches[0].pageY;
-                const pullDistance = currentY - startY;
-
-                if (pullDistance > 100) {
-                    // Optional: Add visual feedback for pull-to-refresh
-                    console.log('Pull to refresh triggered');
-                }
-            }
-        }, { passive: true });
-    }
-
     // Keyboard navigation improvements
     document.addEventListener('keydown', (e) => {
         // ESC key closes modal
@@ -734,126 +690,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 removeOverlay();
             }
         }
-
-        // Tab key navigation
-        if (e.key === 'Tab') {
-            const focusableElements = document.querySelectorAll(
-                'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
-            );
-
-            const firstElement = focusableElements[0];
-            const lastElement = focusableElements[focusableElements.length - 1];
-
-            // Trap focus in modal when open
-            const openModal = document.querySelector('.modal[style*="display: flex"]');
-            if (openModal) {
-                const modalFocusable = openModal.querySelectorAll(
-                    'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled])'
-                );
-
-                if (modalFocusable.length > 0) {
-                    const modalFirst = modalFocusable[0];
-                    const modalLast = modalFocusable[modalFocusable.length - 1];
-
-                    if (e.shiftKey && document.activeElement === modalFirst) {
-                        e.preventDefault();
-                        modalLast.focus();
-                    } else if (!e.shiftKey && document.activeElement === modalLast) {
-                        e.preventDefault();
-                        modalFirst.focus();
-                    }
-                }
-            }
-        }
     });
-
-    // Performance optimization: Lazy load images
-    if ('IntersectionObserver' in window) {
-        const imageObserver = new IntersectionObserver((entries) => {
-            entries.forEach(entry => {
-                if (entry.isIntersecting) {
-                    const img = entry.target;
-                    if (img.dataset.src) {
-                        img.src = img.dataset.src;
-                        img.removeAttribute('data-src');
-                        imageObserver.unobserve(img);
-                    }
-                }
-            });
-        });
-
-        document.querySelectorAll('img[data-src]').forEach(img => {
-            imageObserver.observe(img);
-        });
-    }
-
-    // Network status indicator for mobile
-    if ('onLine' in navigator) {
-        function updateOnlineStatus() {
-            const statusIndicator = document.querySelector('.network-status') || createNetworkStatusIndicator();
-
-            if (navigator.onLine) {
-                statusIndicator.textContent = '';
-                statusIndicator.style.display = 'none';
-            } else {
-                statusIndicator.textContent = '⚠️ No internet connection';
-                statusIndicator.style.display = 'block';
-            }
-        }
-
-        function createNetworkStatusIndicator() {
-            const indicator = document.createElement('div');
-            indicator.className = 'network-status';
-            indicator.style.cssText = `
-                position: fixed;
-                top: 0;
-                left: 0;
-                right: 0;
-                background: #ff9800;
-                color: white;
-                padding: 8px;
-                text-align: center;
-                font-size: 0.9rem;
-                z-index: 9999;
-                display: none;
-            `;
-            document.body.appendChild(indicator);
-            return indicator;
-        }
-
-        window.addEventListener('online', updateOnlineStatus);
-        window.addEventListener('offline', updateOnlineStatus);
-    }
-
-    // Optimize scroll performance on mobile
-    let scrollTimeout;
-    let isScrolling = false;
-
-    window.addEventListener('scroll', () => {
-        if (!isScrolling) {
-            isScrolling = true;
-            document.body.classList.add('is-scrolling');
-        }
-
-        clearTimeout(scrollTimeout);
-        scrollTimeout = setTimeout(() => {
-            isScrolling = false;
-            document.body.classList.remove('is-scrolling');
-        }, 150);
-    }, { passive: true });
-
-    // Add scroll optimization CSS
-    const scrollStyle = document.createElement('style');
-    scrollStyle.textContent = `
-        .is-scrolling * {
-            pointer-events: none !important;
-        }
-        
-        .is-scrolling .event-card {
-            transition: none !important;
-        }
-    `;
-    document.head.appendChild(scrollStyle);
 
     console.log('Mobile enhancements loaded successfully');
 });
