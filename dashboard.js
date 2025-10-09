@@ -20,6 +20,9 @@ if (!firebase.apps.length) {
 const auth = firebase.auth();
 const db = firebase.firestore();
 
+// Global variables
+let currentEditEventId = null;
+
 // Enable offline persistence
 db.enablePersistence({ synchronizeTabs: true })
     .catch((err) => {
@@ -168,39 +171,60 @@ function truncateText(text, maxLength) {
 
 // Show create event modal
 window.showCreateEventModal = function () {
+    currentEditEventId = null;
     const modal = document.getElementById('createEventModal');
-    if (modal) {
-        modal.style.display = 'flex';
-    }
+    const modalTitle = modal.querySelector('.modal-header h2');
+    const submitButton = modal.querySelector('button[type="submit"]');
+
+    // Reset to create mode
+    modalTitle.textContent = 'Create New Event';
+    submitButton.innerHTML = '<i class="fas fa-plus"></i> Create Event';
+
+    // Clear form
+    document.getElementById('createEventForm').reset();
+    modal.style.display = 'flex';
 };
 
 // Close create event modal
 window.closeCreateEventModal = function () {
     const modal = document.getElementById('createEventModal');
-    if (modal) {
-        modal.style.display = 'none';
-        document.getElementById('createEventForm').reset();
-    }
+    const modalTitle = modal.querySelector('.modal-header h2');
+    const submitButton = modal.querySelector('button[type="submit"]');
+
+    // Reset to create mode
+    modalTitle.textContent = 'Create New Event';
+    submitButton.innerHTML = '<i class="fas fa-plus"></i> Create Event';
+    currentEditEventId = null;
+
+    modal.style.display = 'none';
+    document.getElementById('createEventForm').reset();
 };
 
-// Show import events modal (placeholder)
-window.showImportEventsModal = function () {
-    showInfo('Import events feature coming soon!');
-};
+// Update the existing editEvent function
+window.editEvent = async function (id) {
+    currentEditEventId = id;
+    const event = await db.collection('events').doc(id).get();
+    if (!event.exists) return showError('Event not found');
 
-// Show Report events modal (placeholder)
-window.showReportEventsModal = function () {
-    showInfo('Report events feature coming soon!');
-};
+    const data = event.data();
+    const modal = document.getElementById('createEventModal');
 
-// View event details
-window.viewEventDetails = function (id) {
-    window.location.href = `event-details.html?id=${id}`;
-};
+    // Populate form fields
+    document.getElementById('eventName').value = data.name;
+    document.getElementById('eventDate').value = new Date(data.date).toISOString().slice(0, 16);
+    document.getElementById('eventLocation').value = data.location;
+    document.getElementById('teamSize').value = data.teamSize;
+    document.getElementById('maxTeams').value = data.maxTeams || 10;
+    document.getElementById('eventCost').value = data.cost;
+    document.getElementById('eventDescription').value = data.description;
 
-// Edit event
-window.editEvent = function (id) {
-    window.location.href = `event-details.html?id=${id}&edit=true`;
+    // Change to edit mode
+    const modalTitle = modal.querySelector('.modal-header h2');
+    const submitButton = modal.querySelector('button[type="submit"]');
+    modalTitle.textContent = 'Edit Event';
+    submitButton.innerHTML = '<i class="fas fa-save"></i> Update Event';
+
+    modal.style.display = 'flex';
 };
 
 // Delete event
@@ -402,19 +426,58 @@ function initializeLogoutButtons() {
     });
 }
 
-// Handle create event form submission
+// Main DOMContentLoaded event listener - consolidate all initialization here
+// Main DOMContentLoaded event listener - consolidate all initialization here
+// Main DOMContentLoaded event listener - REPLACE YOUR ENTIRE DOMContentLoaded (lines 417-557)
 document.addEventListener('DOMContentLoaded', () => {
     console.log('DOM Content Loaded - Initializing...');
-    
+
     // Initialize sidebar toggle functionality
     initializeSidebar();
 
     // Initialize dropdown functionality
     initializeDropdowns();
 
-    // Initialize logout buttons - THIS IS THE KEY FIX
+    // Initialize logout buttons
     initializeLogoutButtons();
 
+    // Initialize mobile enhancements
+    initializeMobileEnhancements();
+
+    // ===== MODAL CLOSE HANDLERS =====
+    // Modal close button (X button)
+    const closeBtn = document.querySelector('.close-modal');
+    if (closeBtn) {
+        closeBtn.addEventListener('click', closeCreateEventModal);
+        console.log('Close button initialized');
+    } else {
+        console.warn('Close button (.close-modal) not found in HTML');
+    }
+
+    // Close modal when clicking outside (on the backdrop)
+    const modal = document.getElementById('createEventModal');
+    if (modal) {
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                closeCreateEventModal();
+            }
+        });
+        console.log('Modal backdrop click handler initialized');
+    } else {
+        console.warn('Modal (#createEventModal) not found in HTML');
+    }
+
+    // Close modal with Escape key
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            const modal = document.getElementById('createEventModal');
+            if (modal && modal.style.display === 'flex') {
+                closeCreateEventModal();
+            }
+        }
+    });
+
+    // ===== FORM SUBMISSION =====
     const createEventForm = document.getElementById('createEventForm');
     if (createEventForm) {
         createEventForm.addEventListener('submit', async (e) => {
@@ -422,13 +485,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const user = auth.currentUser;
             if (!user) {
-                showError('You must be logged in to create an event');
+                showError('You must be logged in to create/edit an event');
                 return;
             }
 
             const submitButton = createEventForm.querySelector('button[type="submit"]');
             const originalText = submitButton.innerHTML;
-            submitButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creating...';
+
+            // Change text based on whether we're editing or creating
+            const loadingText = currentEditEventId ?
+                '<i class="fas fa-spinner fa-spin"></i> Updating...' :
+                '<i class="fas fa-spinner fa-spin"></i> Creating...';
+
+            submitButton.innerHTML = loadingText;
             submitButton.disabled = true;
 
             try {
@@ -439,48 +508,40 @@ document.addEventListener('DOMContentLoaded', () => {
                     teamSize: parseInt(document.getElementById('teamSize').value),
                     maxTeams: parseInt(document.getElementById('maxTeams')?.value || 10),
                     cost: parseFloat(document.getElementById('eventCost').value),
-                    description: document.getElementById('eventDescription').value,
-                    createdBy: user.uid,
-                    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                    status: 'upcoming',
-                    participants: []
+                    description: document.getElementById('eventDescription').value
                 };
 
-                await db.collection('events').add(eventData);
+                if (currentEditEventId) {
+                    // UPDATE existing event
+                    eventData.lastUpdated = firebase.firestore.FieldValue.serverTimestamp();
+                    await db.collection('events').doc(currentEditEventId).update(eventData);
+                    showSuccess('Event updated successfully!');
+                } else {
+                    // CREATE new event
+                    eventData.createdBy = user.uid;
+                    eventData.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+                    eventData.status = 'upcoming';
+                    eventData.participants = [];
+                    await db.collection('events').add(eventData);
+                    showSuccess('Event created successfully!');
+                }
 
-                showSuccess('Event created successfully!');
                 closeCreateEventModal();
                 await loadDashboardData();
 
             } catch (error) {
-                console.error('Error creating event:', error);
-                showError('Failed to create event. Please try again.');
+                console.error('Error saving event:', error);
+                showError('Failed to save event. Please try again.');
             } finally {
                 submitButton.innerHTML = originalText;
                 submitButton.disabled = false;
+                currentEditEventId = null; // Reset after submission
             }
         });
-    }
-
-    // Close modal when clicking outside
-    const modal = document.getElementById('createEventModal');
-    if (modal) {
-        modal.addEventListener('click', (e) => {
-            if (e.target === modal) {
-                closeCreateEventModal();
-            }
-        });
-    }
-
-    // Close modal button
-    const closeBtn = document.querySelector('.close-modal');
-    if (closeBtn) {
-        closeBtn.addEventListener('click', closeCreateEventModal);
     }
 
     console.log('All initializations complete');
 });
-
 // Toast notification functions
 function showSuccess(message) {
     showToast(message, 'success');
@@ -515,7 +576,7 @@ function showToast(message, type = 'info') {
 }
 
 // MOBILE MENU FUNCTIONALITY
-document.addEventListener('DOMContentLoaded', () => {
+function initializeMobileEnhancements() {
     // Mobile Menu Toggle
     const menuToggle = document.querySelector('.menu-toggle');
     const sidebar = document.querySelector('.sidebar');
@@ -693,7 +754,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     console.log('Mobile enhancements loaded successfully');
-});
+}
 
 // Utility function to detect mobile device
 function isMobileDevice() {

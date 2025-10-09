@@ -9,7 +9,7 @@ const firebaseConfig = {
     measurementId: "G-309BJ6P79V"
 };
 
-// Initialize Firebase only once
+// Initialize Firebase
 if (!firebase.apps.length) {
     firebase.initializeApp(firebaseConfig);
 }
@@ -28,6 +28,7 @@ db.enablePersistence({ synchronizeTabs: true })
     });
 
 let allEvents = [];
+let currentEditEventId = null;
 
 // Check authentication
 auth.onAuthStateChanged((user) => {
@@ -36,10 +37,7 @@ auth.onAuthStateChanged((user) => {
         return;
     }
 
-    // Update user interface
     updateUserInterface(user);
-    
-    // Load events
     loadEvents();
 });
 
@@ -87,7 +85,6 @@ function applyFiltersAndDisplay() {
 
     // Filter events
     let filteredEvents = allEvents.filter(event => {
-        // Search filter
         const matchesSearch = !searchTerm || 
             event.name.toLowerCase().includes(searchTerm) ||
             event.location.toLowerCase().includes(searchTerm) ||
@@ -95,7 +92,6 @@ function applyFiltersAndDisplay() {
 
         if (!matchesSearch) return false;
 
-        // Status filter
         if (statusFilter === 'all') return true;
 
         const eventDate = new Date(event.date);
@@ -168,7 +164,7 @@ function displayEvents(events) {
                     <button class="btn-primary" onclick="viewEventDetails('${event.id}')">
                         <i class="fas fa-eye"></i> View Details
                     </button>
-                    <button class="btn-secondary" onclick="editEvent('${event.id}')">
+                    <button class="btn-secondary" onclick="editEventModal('${event.id}')">
                         <i class="fas fa-edit"></i> Edit
                     </button>
                     <button class="btn-danger" onclick="deleteEvent('${event.id}')">
@@ -180,26 +176,109 @@ function displayEvents(events) {
     }).join('');
 }
 
+// Format date helper
+function formatDate(dateStr) {
+    const options = {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+    };
+    return new Date(dateStr).toLocaleDateString('en-IN', options);
+}
+
+// Truncate text helper
+function truncateText(text, maxLength) {
+    if (!text) return '';
+    if (text.length <= maxLength) return text;
+    return text.substr(0, maxLength) + '...';
+}
+
+// View event details
+window.viewEventDetails = function(id) {
+    window.location.href = `event-details.html?id=${id}`;
+};
+
+// Show edit event modal
+window.editEventModal = async function(id) {
+    currentEditEventId = id;
+    const event = allEvents.find(e => e.id === id);
+    
+    if (!event) {
+        showError('Event not found');
+        return;
+    }
+
+    const modal = document.getElementById('createEventModal');
+    const modalTitle = modal.querySelector('.modal-header h2');
+    const submitButton = modal.querySelector('button[type="submit"]');
+    
+    // Change modal title and button text
+    modalTitle.textContent = 'Edit Event';
+    submitButton.innerHTML = '<i class="fas fa-save"></i> Update Event';
+    
+    // Populate form fields
+    document.getElementById('eventName').value = event.name || '';
+    document.getElementById('eventDate').value = event.date ? 
+        new Date(event.date).toISOString().slice(0, 16) : '';
+    document.getElementById('eventLocation').value = event.location || '';
+    document.getElementById('teamSize').value = event.teamSize || '';
+    document.getElementById('maxTeams').value = event.maxTeams || 10;
+    document.getElementById('eventCost').value = event.cost || '';
+    document.getElementById('eventDescription').value = event.description || '';
+
+    modal.style.display = 'flex';
+};
+
+// Close create/edit event modal
+window.closeCreateEventModal = function() {
+    const modal = document.getElementById('createEventModal');
+    const modalTitle = modal.querySelector('.modal-header h2');
+    const submitButton = modal.querySelector('button[type="submit"]');
+    
+    // Reset modal
+    modalTitle.textContent = 'Create New Event';
+    submitButton.innerHTML = '<i class="fas fa-plus"></i> Create Event';
+    currentEditEventId = null;
+    
+    modal.style.display = 'none';
+    document.getElementById('createEventForm').reset();
+};
+
+// Show create event modal
+window.showCreateEventModal = function() {
+    currentEditEventId = null;
+    const modal = document.getElementById('createEventModal');
+    const modalTitle = modal.querySelector('.modal-header h2');
+    const submitButton = modal.querySelector('button[type="submit"]');
+    
+    modalTitle.textContent = 'Create New Event';
+    submitButton.innerHTML = '<i class="fas fa-plus"></i> Create Event';
+    
+    document.getElementById('createEventForm').reset();
+    modal.style.display = 'flex';
+};
+
+// Delete event
 window.deleteEvent = async function(id) {
     const confirmDelete = confirm(
         'Are you sure you want to delete this event? This action cannot be undone.'
     );
-    if (!confirmDelete) location.reload();
+    if (!confirmDelete) return;
 
     try {
         await db.collection('events').doc(id).delete();
         showSuccess('Event deleted successfully');
-        location.reload(); // ✅ Reloads the page after deletion
+        await loadEvents();
     } catch (error) {
         console.error('Error deleting event:', error);
         showError('Error deleting event. Please try again.');
     }
 };
 
-
 // Initialize dropdown functionality
 function initializeDropdowns() {
-    // User dropdown toggle
     const userMenuBtn = document.querySelector('.user-menu-btn');
     const userDropdown = document.querySelector('.user-dropdown');
     
@@ -208,27 +287,23 @@ function initializeDropdowns() {
             e.stopPropagation();
             userDropdown.classList.toggle('show');
             
-            // Close other dropdowns if any
             document.querySelectorAll('.dropdown:not(.user-dropdown)').forEach(dropdown => {
                 dropdown.classList.remove('show');
             });
         });
 
-        // Close dropdown when clicking outside
         document.addEventListener('click', (e) => {
             if (!userMenuBtn.contains(e.target) && !userDropdown.contains(e.target)) {
                 userDropdown.classList.remove('show');
             }
         });
 
-        // Close dropdown when pressing Escape
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
                 userDropdown.classList.remove('show');
             }
         });
 
-        // Handle dropdown item clicks
         const dropdownItems = userDropdown.querySelectorAll('.dropdown-item');
         dropdownItems.forEach(item => {
             item.addEventListener('click', () => {
@@ -236,20 +311,36 @@ function initializeDropdowns() {
             });
         });
     }
+}
 
-    // Handle logout from dropdown
-    const logoutLink = document.getElementById('logout-link');
-    if (logoutLink) {
-        logoutLink.addEventListener('click', async (e) => {
+// Initialize logout buttons
+function initializeLogoutButtons() {
+    const sidebarLogoutBtn = document.getElementById('logout-btn');
+    if (sidebarLogoutBtn) {
+        sidebarLogoutBtn.addEventListener('click', async (e) => {
             e.preventDefault();
-            try {
-                await auth.signOut();
-                window.location.href = 'login.html';
-            } catch (error) {
-                console.error('Error signing out:', error);
-                showError('Error signing out. Please try again.');
-            }
+            await handleLogout();
         });
+    }
+
+    const dropdownLogoutLink = document.getElementById('logout-link');
+    if (dropdownLogoutLink) {
+        dropdownLogoutLink.addEventListener('click', async (e) => {
+            e.preventDefault();
+            await handleLogout();
+        });
+    }
+}
+
+// Unified logout function
+async function handleLogout() {
+    try {
+        await auth.signOut();
+        sessionStorage.clear();
+        window.location.href = 'login.html';
+    } catch (error) {
+        console.error('Error signing out:', error);
+        showError('Error signing out. Please try again.');
     }
 }
 
@@ -260,7 +351,8 @@ function initializeSidebar() {
     const mobileMenuToggle = document.querySelector('#mobile-menu-toggle');
     const dashboardContainer = document.querySelector('.dashboard-container');
     
-    // Create overlay element
+    if (!sidebar || !dashboardContainer) return;
+    
     const overlay = document.createElement('div');
     overlay.className = 'sidebar-overlay';
     overlay.style.cssText = `
@@ -277,7 +369,6 @@ function initializeSidebar() {
     `;
     dashboardContainer.appendChild(overlay);
     
-    // Toggle sidebar function
     function toggleSidebar() {
         sidebar.classList.toggle('active');
         
@@ -292,7 +383,6 @@ function initializeSidebar() {
         }
     }
     
-    // Close sidebar function
     function closeSidebar() {
         sidebar.classList.remove('active');
         overlay.style.opacity = '0';
@@ -300,7 +390,6 @@ function initializeSidebar() {
         document.body.style.overflow = '';
     }
     
-    // Event listeners for both menu toggles
     if (menuToggle) {
         menuToggle.addEventListener('click', toggleSidebar);
     }
@@ -309,10 +398,8 @@ function initializeSidebar() {
         mobileMenuToggle.addEventListener('click', toggleSidebar);
     }
     
-    // Close sidebar when clicking overlay
     overlay.addEventListener('click', closeSidebar);
     
-    // Close sidebar when clicking nav links on mobile
     const navItems = document.querySelectorAll('.nav-item');
     navItems.forEach(item => {
         item.addEventListener('click', () => {
@@ -322,14 +409,12 @@ function initializeSidebar() {
         });
     });
     
-    // Handle window resize
     window.addEventListener('resize', () => {
         if (window.innerWidth > 768) {
             closeSidebar();
         }
     });
     
-    // Handle escape key
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape' && sidebar.classList.contains('active')) {
             closeSidebar();
@@ -337,13 +422,11 @@ function initializeSidebar() {
     });
 }
 
-// Add event listeners for filters and search
+// Handle create/edit event form submission
 document.addEventListener('DOMContentLoaded', () => {
-    // Initialize sidebar functionality
     initializeSidebar();
-    
-    // Initialize dropdown functionality
     initializeDropdowns();
+    initializeLogoutButtons();
     
     const statusFilter = document.getElementById('status-filter');
     const sortFilter = document.getElementById('sort-filter');
@@ -360,11 +443,80 @@ document.addEventListener('DOMContentLoaded', () => {
     if (searchInput) {
         searchInput.addEventListener('input', applyFiltersAndDisplay);
     }
-});
+    
+    // Handle form submission
+    const createEventForm = document.getElementById('createEventForm');
+    if (createEventForm) {
+        createEventForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
 
-function viewEventDetails(id) {
-    window.location.href = `event-details.html?id=${id}`;
-}
+            const user = auth.currentUser;
+            if (!user) {
+                showError('You must be logged in to create/edit an event');
+                return;
+            }
+
+            const submitButton = createEventForm.querySelector('button[type="submit"]');
+            const originalText = submitButton.innerHTML;
+            submitButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> ' + 
+                (currentEditEventId ? 'Updating...' : 'Creating...');
+            submitButton.disabled = true;
+
+            try {
+                const eventData = {
+                    name: document.getElementById('eventName').value,
+                    date: document.getElementById('eventDate').value,
+                    location: document.getElementById('eventLocation').value,
+                    teamSize: parseInt(document.getElementById('teamSize').value),
+                    maxTeams: parseInt(document.getElementById('maxTeams')?.value || 10),
+                    cost: parseFloat(document.getElementById('eventCost').value),
+                    description: document.getElementById('eventDescription').value
+                };
+
+                if (currentEditEventId) {
+                    // Update existing event
+                    eventData.lastUpdated = firebase.firestore.FieldValue.serverTimestamp();
+                    await db.collection('events').doc(currentEditEventId).update(eventData);
+                    showSuccess('Event updated successfully!');
+                } else {
+                    // Create new event
+                    eventData.createdBy = user.uid;
+                    eventData.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+                    eventData.status = 'upcoming';
+                    eventData.participants = [];
+                    await db.collection('events').add(eventData);
+                    showSuccess('Event created successfully!');
+                }
+
+                closeCreateEventModal();
+                await loadEvents();
+
+            } catch (error) {
+                console.error('Error saving event:', error);
+                showError('Failed to save event. Please try again.');
+            } finally {
+                submitButton.innerHTML = originalText;
+                submitButton.disabled = false;
+            }
+        });
+    }
+
+    // Close modal when clicking outside
+    const modal = document.getElementById('createEventModal');
+    if (modal) {
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                closeCreateEventModal();
+            }
+        });
+    }
+
+    // Close modal button
+    const closeBtn = document.querySelector('.close-modal');
+    if (closeBtn) {
+        closeBtn.addEventListener('click', closeCreateEventModal);
+    }
+});
 
 // Toast notification functions
 function showSuccess(message) {
@@ -389,10 +541,8 @@ function showToast(message, type = 'info') {
     
     document.body.appendChild(toast);
     
-    // Trigger animation
     setTimeout(() => toast.classList.add('show'), 10);
     
-    // Remove after 3 seconds
     setTimeout(() => {
         toast.classList.remove('show');
         setTimeout(() => toast.remove(), 300);
