@@ -243,7 +243,6 @@ body {
 .dropdown-item svg {
     margin-right: 10px;
 }
-
 .dropdown-item:hover {
     background: rgba(0, 0, 0, 0.05);
 }
@@ -423,14 +422,27 @@ body {
     transition: all 0.3s ease;
 }
 
-/* Mobile Menu Toggle Button (Hidden by default) */
-.menu-toggle {
+/* Mobile Menu Toggle Button */
+.mobile-menu-toggle {
     display: none;
-    position: absolute;
-    top: 15px;
-    left: 15px;
-    font-size: 1.5rem;
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    z-index: 1001;
+    background: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 12px;
+    font-size: 1.2rem;
     cursor: pointer;
+    box-shadow: var(--shadow-md);
+    transition: all 0.3s ease;
+}
+
+.mobile-menu-toggle:hover {
+    background: var(--primary-dark);
+    transform: scale(1.05);
 }
 
 /* ========================= */
@@ -477,12 +489,27 @@ body {
 
     .sidebar {
         transform: translateX(-100%);
-        width: 250px;
+        width: 280px;
         z-index: 1000;
+        position: fixed;
+        left: 0;
+        top: 0;
+        height: 100vh;
+        background: var(--surface-color);
+        box-shadow: var(--shadow-lg);
     }
 
-    .sidebar.show {
+    .sidebar.active {
         transform: translateX(0);
+    }
+
+    .events-header {
+        flex-direction: column;
+        gap: 3rem;
+    }
+
+    .mobile-menu-toggle {
+        display: block;
     }
 
     .menu-toggle {
@@ -491,6 +518,20 @@ body {
 
     .main-content {
         margin-left: 0;
+        padding-top: 80px; /* Space for mobile menu button */
+    }
+
+    /* Hide search box on mobile */
+
+
+    /* Adjust header for mobile */
+    .content-header {
+        padding: 15px;
+        margin-bottom: 20px;
+    }
+
+    .header-left h1 {
+        font-size: 1.5rem;
     }
 }
 

@@ -181,22 +181,170 @@ function displayEvents(events) {
 }
 
 window.deleteEvent = async function(id) {
-    if (!confirm('Are you sure you want to delete this event? This action cannot be undone.')) {
-        return;
-    }
-    
+    const confirmDelete = confirm(
+        'Are you sure you want to delete this event? This action cannot be undone.'
+    );
+    if (!confirmDelete) location.reload();
+
     try {
         await db.collection('events').doc(id).delete();
         showSuccess('Event deleted successfully');
-        await loadDashboardData();
+        location.reload(); // ✅ Reloads the page after deletion
     } catch (error) {
         console.error('Error deleting event:', error);
         showError('Error deleting event. Please try again.');
     }
 };
 
+
+// Initialize dropdown functionality
+function initializeDropdowns() {
+    // User dropdown toggle
+    const userMenuBtn = document.querySelector('.user-menu-btn');
+    const userDropdown = document.querySelector('.user-dropdown');
+    
+    if (userMenuBtn && userDropdown) {
+        userMenuBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            userDropdown.classList.toggle('show');
+            
+            // Close other dropdowns if any
+            document.querySelectorAll('.dropdown:not(.user-dropdown)').forEach(dropdown => {
+                dropdown.classList.remove('show');
+            });
+        });
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!userMenuBtn.contains(e.target) && !userDropdown.contains(e.target)) {
+                userDropdown.classList.remove('show');
+            }
+        });
+
+        // Close dropdown when pressing Escape
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                userDropdown.classList.remove('show');
+            }
+        });
+
+        // Handle dropdown item clicks
+        const dropdownItems = userDropdown.querySelectorAll('.dropdown-item');
+        dropdownItems.forEach(item => {
+            item.addEventListener('click', () => {
+                userDropdown.classList.remove('show');
+            });
+        });
+    }
+
+    // Handle logout from dropdown
+    const logoutLink = document.getElementById('logout-link');
+    if (logoutLink) {
+        logoutLink.addEventListener('click', async (e) => {
+            e.preventDefault();
+            try {
+                await auth.signOut();
+                window.location.href = 'login.html';
+            } catch (error) {
+                console.error('Error signing out:', error);
+                showError('Error signing out. Please try again.');
+            }
+        });
+    }
+}
+
+// Sidebar toggle functionality
+function initializeSidebar() {
+    const sidebar = document.querySelector('.sidebar');
+    const menuToggle = document.querySelector('.menu-toggle');
+    const mobileMenuToggle = document.querySelector('#mobile-menu-toggle');
+    const dashboardContainer = document.querySelector('.dashboard-container');
+    
+    // Create overlay element
+    const overlay = document.createElement('div');
+    overlay.className = 'sidebar-overlay';
+    overlay.style.cssText = `
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 999;
+        opacity: 0;
+        transition: opacity 0.3s ease;
+    `;
+    dashboardContainer.appendChild(overlay);
+    
+    // Toggle sidebar function
+    function toggleSidebar() {
+        sidebar.classList.toggle('active');
+        
+        if (sidebar.classList.contains('active')) {
+            overlay.style.display = 'block';
+            setTimeout(() => overlay.style.opacity = '1', 10);
+            document.body.style.overflow = 'hidden';
+        } else {
+            overlay.style.opacity = '0';
+            setTimeout(() => overlay.style.display = 'none', 300);
+            document.body.style.overflow = '';
+        }
+    }
+    
+    // Close sidebar function
+    function closeSidebar() {
+        sidebar.classList.remove('active');
+        overlay.style.opacity = '0';
+        setTimeout(() => overlay.style.display = 'none', 300);
+        document.body.style.overflow = '';
+    }
+    
+    // Event listeners for both menu toggles
+    if (menuToggle) {
+        menuToggle.addEventListener('click', toggleSidebar);
+    }
+    
+    if (mobileMenuToggle) {
+        mobileMenuToggle.addEventListener('click', toggleSidebar);
+    }
+    
+    // Close sidebar when clicking overlay
+    overlay.addEventListener('click', closeSidebar);
+    
+    // Close sidebar when clicking nav links on mobile
+    const navItems = document.querySelectorAll('.nav-item');
+    navItems.forEach(item => {
+        item.addEventListener('click', () => {
+            if (window.innerWidth <= 768) {
+                closeSidebar();
+            }
+        });
+    });
+    
+    // Handle window resize
+    window.addEventListener('resize', () => {
+        if (window.innerWidth > 768) {
+            closeSidebar();
+        }
+    });
+    
+    // Handle escape key
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && sidebar.classList.contains('active')) {
+            closeSidebar();
+        }
+    });
+}
+
 // Add event listeners for filters and search
 document.addEventListener('DOMContentLoaded', () => {
+    // Initialize sidebar functionality
+    initializeSidebar();
+    
+    // Initialize dropdown functionality
+    initializeDropdowns();
+    
     const statusFilter = document.getElementById('status-filter');
     const sortFilter = document.getElementById('sort-filter');
     const searchInput = document.querySelector('.search-box input');
@@ -216,4 +364,37 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function viewEventDetails(id) {
     window.location.href = `event-details.html?id=${id}`;
+}
+
+// Toast notification functions
+function showSuccess(message) {
+    showToast(message, 'success');
+}
+
+function showError(message) {
+    showToast(message, 'error');
+}
+
+function showInfo(message) {
+    showToast(message, 'info');
+}
+
+function showToast(message, type = 'info') {
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.innerHTML = `
+        <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'}"></i>
+        <span>${message}</span>
+    `;
+    
+    document.body.appendChild(toast);
+    
+    // Trigger animation
+    setTimeout(() => toast.classList.add('show'), 10);
+    
+    // Remove after 3 seconds
+    setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
 }

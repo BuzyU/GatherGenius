@@ -173,6 +173,10 @@ function applyTheme() {
     }
 }
 
+function showInfo(message) {
+    showToast(message, 'info');
+}
+
 // Save settings
 window.saveSettings = async function() {
     try {
@@ -322,10 +326,10 @@ window.clearCache = function() {
                 indexedDB.deleteDatabase('gathergenius-cache');
             }
             
-            showToast('Cache cleared successfully!', 'success');
+            showInfo('Cache Cleared');
         } catch (error) {
             console.error('Error clearing cache:', error);
-            showToast('Error clearing cache', 'error');
+            showInfo('Error clearing cache', 'error');
         }
     }
 };

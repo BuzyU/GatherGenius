@@ -3,13 +3,13 @@ const firebaseConfig = {
     apiKey: "AIzaSyCKd_iH-McAMrKI_0YDoYG0xjn2KrQpTOQ",
     authDomain: "notifyme-events.firebaseapp.com",
     projectId: "notifyme-events",
-    storageBucket: "notifyme-events.firebasestorage.app",
+    storageBucket: "notifyme-events.appspot.com",
     messagingSenderId: "761571632545",
     appId: "1:761571632545:web:547a7210fdebf366df97e0",
     measurementId: "G-309BJ6P79V"
 };
 
-// Initialize Firebase only once
+// Initialize Firebase only once (for authentication only)
 let app;
 if (!firebase.apps.length) {
     app = firebase.initializeApp(firebaseConfig);
@@ -19,17 +19,40 @@ if (!firebase.apps.length) {
 
 const auth = firebase.auth();
 const db = firebase.firestore();
-
-// Simple persistence setup - no aggressive offline detection
-try {
-    db.enablePersistence({ synchronizeTabs: true })
-        .catch((err) => {
-            // Just log warnings, don't block functionality
-            console.warn('Persistence not enabled:', err.code);
-        });
-} catch (err) {
-    console.warn('Persistence setup failed:', err);
-}
+// LocalStorage helper functions
+const StorageHelper = {
+    getEvents: function() {
+        const events = localStorage.getItem('events');
+        return events ? JSON.parse(events) : [];
+    },
+    
+    saveEvents: function(events) {
+        localStorage.setItem('events', JSON.stringify(events));
+    },
+    
+    getEventById: function(id) {
+        const events = this.getEvents();
+        return events.find(e => e.id === id);
+    },
+    
+    updateEvent: function(id, updatedData) {
+        const events = this.getEvents();
+        const index = events.findIndex(e => e.id === id);
+        if (index !== -1) {
+            events[index] = { ...events[index], ...updatedData, lastUpdated: new Date().toISOString() };
+            this.saveEvents(events);
+            return events[index];
+        }
+        return null;
+    },
+    
+    deleteEvent: function(id) {
+        const events = this.getEvents();
+        const filtered = events.filter(e => e.id !== id);
+        this.saveEvents(filtered);
+        return true;
+    }
+};
 
 let currentEvent = null;
 let currentUser = null;
@@ -37,7 +60,11 @@ const eventId = new URLSearchParams(window.location.search).get('id');
 
 // Check if event ID exists in URL
 if (!eventId) {
-    window.location.href = 'dashboard.html';
+    console.error('No event ID provided in URL');
+    showError('No event ID provided. Redirecting to dashboard...');
+    setTimeout(() => {
+        window.location.href = 'dashboard.html';
+    }, 2000);
 }
 
 // Check authentication and load event data
@@ -48,8 +75,6 @@ auth.onAuthStateChanged(async (user) => {
     }
     
     currentUser = user;
-    
-    // Show loading state
     showLoadingState();
     
     try {
@@ -57,20 +82,24 @@ auth.onAuthStateChanged(async (user) => {
         hideLoadingState();
     } catch (error) {
         console.error('Error loading event details:', error);
-        showError('Error loading event details. Please refresh the page.');
+        showError('Error loading event details: ' + error.message);
         hideLoadingState();
     }
 });
 
-// Load event details
+// Load event details from firestore
 async function loadEventDetails() {
+    console.log('Loading event details for ID:', eventId);
     try {
-        const eventDoc = await db.collection('events').doc(eventId).get();
-        if (eventDoc.exists) {
-            currentEvent = { id: eventDoc.id, ...eventDoc.data() };
+        const doc = await db.collection('events').doc(eventId).get();
+        
+        if (doc.exists) {
+            currentEvent = { id: doc.id, ...doc.data() };
+            console.log('Event data loaded:', currentEvent);
             displayEventDetails(currentEvent);
             updateUIForUserRole();
         } else {
+            console.error('Event not found in Firestore');
             showError('Event not found');
             setTimeout(() => {
                 window.location.href = 'dashboard.html';
@@ -78,12 +107,12 @@ async function loadEventDetails() {
         }
     } catch (error) {
         console.error('Error loading event:', error);
-        showError('Error loading event details');
-        throw error; // Re-throw to be caught by the caller
+        showError('Error loading event details: ' + error.message);
+        throw error;
     }
 }
 
-// Update UI based on user role (organizer vs participant)
+// Update UI based on user role
 function updateUIForUserRole() {
     const isOrganizer = currentUser && currentEvent.createdBy === currentUser.uid;
     const eventActions = document.querySelector('.event-actions');
@@ -95,20 +124,33 @@ function updateUIForUserRole() {
 
 // Display event details
 function displayEventDetails(event) {
-    document.getElementById('event-title').textContent = event.name;
+    console.log('Displaying event details:', event);
+    
+    // Update event title
+    document.getElementById('event-title').textContent = event.name || 'Untitled Event';
+    
+    // Update event status
     const eventDate = new Date(event.date);
     const now = new Date();
-    const status = eventDate > now ? 'upcoming' : (eventDate.toDateString() === now.toDateString() ? 'in-progress' : 'completed');
+    const status = eventDate > now ? 'upcoming' : 
+                   (eventDate.toDateString() === now.toDateString() ? 'in-progress' : 'completed');
     
     const statusElement = document.getElementById('event-status');
     statusElement.textContent = status.charAt(0).toUpperCase() + status.slice(1);
     statusElement.className = `event-status ${status}`;
 
-    document.getElementById('event-datetime').textContent = new Date(event.date).toLocaleString();
-    document.getElementById('event-location').textContent = event.location;
-    document.getElementById('event-team-size').textContent = `${event.teamSize} members`;
-    document.getElementById('event-cost').textContent = `₹${event.cost}`;
-    document.getElementById('event-description').textContent = event.description;
+    // Update event details
+    document.getElementById('event-datetime').textContent = new Date(event.date).toLocaleString('en-IN', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+    document.getElementById('event-location').textContent = event.location || 'Not specified';
+    document.getElementById('event-team-size').textContent = `${event.teamSize || 0} members`;
+    document.getElementById('event-cost').textContent = `₹${event.cost || 0}`;
+    document.getElementById('event-description').textContent = event.description || 'No description provided';
 
     loadParticipants(event.participants || []);
     updateRegistrationStatus(event);
@@ -146,7 +188,6 @@ function updateRegistrationStatus(event) {
     const now = new Date();
     const isOrganizer = currentUser && event.createdBy === currentUser.uid;
     
-    // Generate registration URL
     const baseUrl = window.location.origin + window.location.pathname.replace('event-details.html', '');
     const registrationUrl = `${baseUrl}registration.html?eventId=${eventId}`;
 
@@ -202,70 +243,93 @@ window.copyRegistrationUrl = function() {
 };
 
 // Show edit event modal
-window.showEditEventModal = function() {
-    if (!currentUser || currentEvent.createdBy !== currentUser.uid) {
-        showError('Only the event organizer can edit this event');
-        return;
-    }
-
+window.editEventModal = function() {
     const modal = document.getElementById('editEventModal');
-    const form = document.getElementById('editEventForm');
-
-    document.getElementById('editEventName').value = currentEvent.name;
-    document.getElementById('editEventDate').value = new Date(currentEvent.date).toISOString().slice(0, 16);
-    document.getElementById('editEventLocation').value = currentEvent.location;
-    document.getElementById('editTeamSize').value = currentEvent.teamSize;
-    document.getElementById('editEventCost').value = currentEvent.cost;
-    document.getElementById('editEventDescription').value = currentEvent.description;
+    
+    // Populate form fields
+    document.getElementById('editEventName').value = currentEvent.name || '';
+    document.getElementById('editEventDate').value = currentEvent.date ? 
+        new Date(currentEvent.date).toISOString().slice(0, 16) : '';
+    document.getElementById('editEventLocation').value = currentEvent.location || '';
+    document.getElementById('editTeamSize').value = currentEvent.teamSize || '';
+    document.getElementById('editEventCost').value = currentEvent.cost || '';
+    document.getElementById('editEventDescription').value = currentEvent.description || '';
 
     modal.classList.add('show');
-
-    form.onsubmit = null;
-    form.onsubmit = async (e) => {
-        e.preventDefault();
-        await updateEvent();
-    };
 };
 
-// Update event
+// Close edit modal
+window.closeEditEventModal = function() {
+    document.getElementById('editEventModal').classList.remove('show');
+};
+
+// Handle edit form submission
+document.addEventListener('DOMContentLoaded', () => {
+    const editForm = document.getElementById('editEventForm');
+    if (editForm) {
+        editForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            await updateEvent();
+        });
+    }
+});
+
+// Update event in localStorage
 async function updateEvent() {
-    if (!currentUser || currentEvent.createdBy !== currentUser.uid) {
+    if (!currentUser || !currentEvent || currentEvent.createdBy !== currentUser.uid) {
         showError('Only the event organizer can update this event');
         return;
     }
 
     try {
-        const updatedEvent = {
+        const updatedData = {
             name: document.getElementById('editEventName').value,
             date: document.getElementById('editEventDate').value,
             location: document.getElementById('editEventLocation').value,
             teamSize: parseInt(document.getElementById('editTeamSize').value),
             cost: parseFloat(document.getElementById('editEventCost').value),
-            description: document.getElementById('editEventDescription').value,
-            lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
+            description: document.getElementById('editEventDescription').value
         };
 
-        await db.collection('events').doc(eventId).update(updatedEvent);
+        const updatedEvent = StorageHelper.updateEvent(eventId, updatedData);
         
-        closeEditEventModal();
-        await loadEventDetails();
-        showSuccess('Event updated successfully!');
+        if (updatedEvent) {
+            closeEditEventModal();
+            showSuccess('Event updated successfully!');
+            await loadEventDetails();
+        } else {
+            showError('Failed to update event');
+        }
     } catch (error) {
         console.error('Error updating event:', error);
-        showError('Error updating event');
+        showError('Error updating event: ' + error.message);
     }
 }
 
-// Delete event
+// Show delete confirmation modal
+window.deleteConfirmModal = function() {
+    if (!currentUser || !currentEvent || currentEvent.createdBy !== currentUser.uid) {
+        showError('Only the event organizer can delete this event');
+        return;
+    }
+    document.getElementById('deleteConfirmModal').classList.add('show');
+};
+
+// Close delete modal
+window.closeDeleteConfirmModal = function() {
+    document.getElementById('deleteConfirmModal').classList.remove('show');
+};
+
+// Delete event from localStorage
 window.deleteEvent = async function() {
-    if (!currentUser || currentEvent.createdBy !== currentUser.uid) {
+    if (!currentUser || !currentEvent || currentEvent.createdBy !== currentUser.uid) {
         showError('Only the event organizer can delete this event');
         closeDeleteConfirmModal();
         return;
     }
 
     try {
-        await db.collection('events').doc(eventId).delete();
+        StorageHelper.deleteEvent(eventId);
         closeDeleteConfirmModal();
         showSuccess('Event deleted successfully!');
         
@@ -274,42 +338,8 @@ window.deleteEvent = async function() {
         }, 1500);
     } catch (error) {
         console.error('Error deleting event:', error);
-        showError('Error deleting event');
+        showError('Error deleting event: ' + error.message);
     }
-};
-
-// Show/hide messages
-function showError(message) {
-    const toast = document.createElement('div');
-    toast.className = 'toast error';
-    toast.textContent = message;
-    document.body.appendChild(toast);
-    setTimeout(() => toast.remove(), 3000);
-}
-
-function showSuccess(message) {
-    const toast = document.createElement('div');
-    toast.className = 'toast success';
-    toast.textContent = message;
-    document.body.appendChild(toast);
-    setTimeout(() => toast.remove(), 3000);
-}
-
-// Modal controls
-window.closeEditEventModal = function() {
-    document.getElementById('editEventModal').classList.remove('show');
-};
-
-window.confirmDeleteEvent = function() {
-    if (!currentUser || currentEvent.createdBy !== currentUser.uid) {
-        showError('Only the event organizer can delete this event');
-        return;
-    }
-    document.getElementById('deleteConfirmModal').classList.add('show');
-};
-
-window.closeDeleteConfirmModal = function() {
-    document.getElementById('deleteConfirmModal').classList.remove('show');
 };
 
 // Register for event
@@ -326,15 +356,12 @@ window.registerForEvent = async function() {
             return;
         }
 
-        const eventRef = db.collection('events').doc(eventId);
-        const eventDoc = await eventRef.get();
-        
-        if (!eventDoc.exists) {
+        const event = StorageHelper.getEventById(eventId);
+        if (!event) {
             showError('Event not found');
             return;
         }
 
-        const event = eventDoc.data();
         const participants = event.participants || [];
 
         if (participants.some(p => p.uid === user.uid)) {
@@ -362,17 +389,17 @@ window.registerForEvent = async function() {
             registeredAt: new Date().toISOString()
         });
 
-        await eventRef.update({ participants });
+        StorageHelper.updateEvent(eventId, { participants });
         
         await loadEventDetails();
         showSuccess('Successfully registered for event!');
     } catch (error) {
         console.error('Error registering for event:', error);
-        showError('Error registering for event');
+        showError('Error registering for event: ' + error.message);
     }
 };
 
-// Show loading state
+// Show/hide loading state
 function showLoadingState() {
     const loadingElements = [
         'event-title', 'event-datetime', 'event-location', 
@@ -387,35 +414,30 @@ function showLoadingState() {
         }
     });
     
-    // Show loading for participants list
     const participantsList = document.getElementById('participants-list');
     if (participantsList) {
         participantsList.innerHTML = '<div class="loading-placeholder">Loading participants...</div>';
     }
     
-    // Show loading for registration status
     const registrationStatus = document.getElementById('registration-status');
     if (registrationStatus) {
         registrationStatus.innerHTML = '<div class="loading-placeholder">Loading registration info...</div>';
     }
 }
 
-// Hide loading state
 function hideLoadingState() {
     const loadingElements = document.querySelectorAll('.loading');
     loadingElements.forEach(element => {
         element.classList.remove('loading');
     });
     
-    // Remove loading placeholders
     const loadingPlaceholders = document.querySelectorAll('.loading-placeholder');
     loadingPlaceholders.forEach(placeholder => {
         placeholder.remove();
     });
 }
 
-
-// Utility functions for notifications
+// Toast notifications
 function showError(message) {
     showToast(message, 'error');
 }
@@ -425,11 +447,9 @@ function showSuccess(message) {
 }
 
 function showToast(message, type = 'info') {
-    // Remove existing toasts
     const existingToasts = document.querySelectorAll('.toast');
     existingToasts.forEach(toast => toast.remove());
     
-    // Create toast element
     const toast = document.createElement('div');
     toast.className = `toast toast-${type}`;
     toast.innerHTML = `
@@ -440,10 +460,8 @@ function showToast(message, type = 'info') {
         <button class="toast-close" onclick="this.parentElement.remove()">×</button>
     `;
     
-    // Add toast to body
     document.body.appendChild(toast);
     
-    // Auto remove after 5 seconds
     setTimeout(() => {
         if (toast.parentElement) {
             toast.remove();
@@ -460,8 +478,60 @@ function getToastIcon(type) {
     }
 }
 
+// Sidebar toggle
+function initializeSidebar() {
+    const sidebar = document.querySelector('.sidebar');
+    const menuToggle = document.querySelector('.menu-toggle');
+    const dashboardContainer = document.querySelector('.dashboard-container');
+    
+    const overlay = document.createElement('div');
+    overlay.className = 'sidebar-overlay';
+    dashboardContainer.appendChild(overlay);
+    
+    function toggleSidebar() {
+        sidebar.classList.toggle('active');
+        overlay.classList.toggle('active');
+        document.body.style.overflow = sidebar.classList.contains('active') ? 'hidden' : '';
+    }
+    
+    function closeSidebar() {
+        sidebar.classList.remove('active');
+        overlay.classList.remove('active');
+        document.body.style.overflow = '';
+    }
+    
+    if (menuToggle) {
+        menuToggle.addEventListener('click', toggleSidebar);
+    }
+    
+    overlay.addEventListener('click', closeSidebar);
+    
+    const navItems = document.querySelectorAll('.nav-item');
+    navItems.forEach(item => {
+        item.addEventListener('click', () => {
+            if (window.innerWidth <= 1024) {
+                closeSidebar();
+            }
+        });
+    });
+    
+    window.addEventListener('resize', () => {
+        if (window.innerWidth > 1024) {
+            closeSidebar();
+        }
+    });
+    
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && sidebar.classList.contains('active')) {
+            closeSidebar();
+        }
+    });
+}
+
 // Logout
 document.addEventListener('DOMContentLoaded', () => {
+    initializeSidebar();
+    
     const logoutBtn = document.getElementById('logout-btn');
     if (logoutBtn) {
         logoutBtn.addEventListener('click', async () => {

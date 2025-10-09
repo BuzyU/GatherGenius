@@ -45,7 +45,7 @@ function createEventCard(event, eventId) {
             <div class="event-details">
                 <p><i class="fas fa-map-marker-alt"></i> ${event.location}</p>
                 <p><i class="fas fa-users"></i> Team Size: ${event.teamSize}</p>
-                <p><i class="fas fa-rupee-sign"></i> Cost: ₹${event.cost}</p>
+                <p><i class="fas fa-rupee-sign"></i> Cos: ₹${event.cost}</p>
                 <p><i class="fas fa-user-friends"></i> Participants: 0</p>
             </div>
             <div class="event-description">

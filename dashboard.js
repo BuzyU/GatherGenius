@@ -39,7 +39,7 @@ auth.onAuthStateChanged(async (user) => {
 
     // Update user interface
     updateUserInterface(user);
-    
+
     // Load dashboard data
     await loadDashboardData();
 });
@@ -48,11 +48,11 @@ auth.onAuthStateChanged(async (user) => {
 function updateUserInterface(user) {
     const userNameElement = document.getElementById('user-name');
     const userAvatarElement = document.getElementById('user-avatar');
-    
+
     if (userNameElement) {
         userNameElement.textContent = user.displayName || user.email.split('@')[0];
     }
-    
+
     if (userAvatarElement) {
         if (user.photoURL) {
             userAvatarElement.src = user.photoURL;
@@ -86,7 +86,7 @@ function updateStats(events) {
     const totalEvents = events.length;
     const upcomingEvents = events.filter(e => new Date(e.date) > now).length;
     const totalParticipants = events.reduce((sum, e) => sum + (e.participants?.length || 0), 0);
-    const avgTeamSize = events.length > 0 
+    const avgTeamSize = events.length > 0
         ? (events.reduce((sum, e) => sum + (e.teamSize || 0), 0) / events.length).toFixed(1)
         : 0;
 
@@ -111,9 +111,9 @@ function displayRecentEvents(events) {
     eventsGrid.innerHTML = sortedEvents.map(event => {
         const eventDate = new Date(event.date);
         const now = new Date();
-        const status = eventDate > now ? 'upcoming' : 
-                      (eventDate.toDateString() === now.toDateString() ? 'in-progress' : 'completed');
-        
+        const status = eventDate > now ? 'upcoming' :
+            (eventDate.toDateString() === now.toDateString() ? 'in-progress' : 'completed');
+
         return `
         <div class="event-card ${status}" data-id="${event.id}">
             <div class="event-header">
@@ -149,11 +149,11 @@ function displayRecentEvents(events) {
 
 // Format date helper
 function formatDate(dateStr) {
-    const options = { 
-        year: 'numeric', 
-        month: 'short', 
-        day: 'numeric', 
-        hour: '2-digit', 
+    const options = {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
         minute: '2-digit'
     };
     return new Date(dateStr).toLocaleDateString('en-IN', options);
@@ -167,7 +167,7 @@ function truncateText(text, maxLength) {
 }
 
 // Show create event modal
-window.showCreateEventModal = function() {
+window.showCreateEventModal = function () {
     const modal = document.getElementById('createEventModal');
     if (modal) {
         modal.style.display = 'flex';
@@ -175,7 +175,7 @@ window.showCreateEventModal = function() {
 };
 
 // Close create event modal
-window.closeCreateEventModal = function() {
+window.closeCreateEventModal = function () {
     const modal = document.getElementById('createEventModal');
     if (modal) {
         modal.style.display = 'none';
@@ -184,38 +184,200 @@ window.closeCreateEventModal = function() {
 };
 
 // Show import events modal (placeholder)
-window.showImportEventsModal = function() {
+window.showImportEventsModal = function () {
     showInfo('Import events feature coming soon!');
 };
 
+// Show Report events modal (placeholder)
+window.showReportEventsModal = function () {
+    showInfo('Report events feature coming soon!');
+};
+
 // View event details
-window.viewEventDetails = function(id) {
+window.viewEventDetails = function (id) {
     window.location.href = `event-details.html?id=${id}`;
 };
 
 // Edit event
-window.editEvent = function(id) {
+window.editEvent = function (id) {
     window.location.href = `event-details.html?id=${id}&edit=true`;
 };
 
 // Delete event
-window.deleteEvent = async function(id) {
-    if (!confirm('Are you sure you want to delete this event? This action cannot be undone.')) {
-        return;
-    }
-    
+window.deleteEvent = async function (id) {
+    const confirmDelete = confirm(
+        'Are you sure you want to delete this event? This action cannot be undone.'
+    );
+    if (!confirmDelete) return;
+
     try {
         await db.collection('events').doc(id).delete();
         showSuccess('Event deleted successfully');
-        await loadDashboardData();
+        location.reload(); // ✅ Reloads the page after deletion
     } catch (error) {
         console.error('Error deleting event:', error);
         showError('Error deleting event. Please try again.');
     }
 };
 
+
+// Global close sidebar function (accessible from HTML onclick)
+window.closeSidebar = function () {
+    const sidebar = document.querySelector('.sidebar');
+    const overlay = document.querySelector('.sidebar-overlay');
+
+    if (sidebar) {
+        sidebar.classList.remove('active');
+        sidebar.classList.remove('show');
+    }
+
+    if (overlay) {
+        overlay.style.opacity = '0';
+        setTimeout(() => overlay.style.display = 'none', 300);
+    }
+
+    document.body.style.overflow = '';
+};
+
+// Sidebar toggle functionality
+function initializeSidebar() {
+    const sidebar = document.querySelector('.sidebar');
+    const menuToggle = document.querySelector('.menu-toggle');
+    const mobileMenuToggle = document.querySelector('#mobile-menu-toggle');
+    const dashboardContainer = document.querySelector('.dashboard-container');
+
+    // Create overlay element
+    const overlay = document.createElement('div');
+    overlay.className = 'sidebar-overlay';
+    overlay.style.cssText = `
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 999;
+        opacity: 0;
+        transition: opacity 0.3s ease;
+    `;
+    dashboardContainer.appendChild(overlay);
+
+    // Toggle sidebar function
+    function toggleSidebar() {
+        sidebar.classList.toggle('active');
+
+        if (sidebar.classList.contains('active')) {
+            overlay.style.display = 'block';
+            setTimeout(() => overlay.style.opacity = '1', 10);
+            document.body.style.overflow = 'hidden';
+        } else {
+            overlay.style.opacity = '0';
+            setTimeout(() => overlay.style.display = 'none', 300);
+            document.body.style.overflow = '';
+        }
+    }
+    // Event listeners for both menu toggles
+    if (menuToggle) {
+        menuToggle.addEventListener('click', toggleSidebar);
+    }
+
+    if (mobileMenuToggle) {
+        mobileMenuToggle.addEventListener('click', toggleSidebar);
+    }
+
+    // Close sidebar when clicking overlay
+    overlay.addEventListener('click', window.closeSidebar);
+
+    // Close sidebar when clicking nav links on mobile
+    const navItems = document.querySelectorAll('.nav-item');
+    navItems.forEach(item => {
+        item.addEventListener('click', () => {
+            if (window.innerWidth <= 768) {
+                window.closeSidebar();
+            }
+        });
+    });
+
+    // Handle window resize
+    window.addEventListener('resize', () => {
+        if (window.innerWidth > 768) {
+            window.closeSidebar();
+        }
+    });
+
+    // Handle escape key
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && sidebar.classList.contains('active')) {
+            window.closeSidebar();
+        }
+    });
+}
+
+// Initialize dropdown functionality
+function initializeDropdowns() {
+    // User dropdown toggle
+    const userMenuBtn = document.querySelector('.user-menu-btn');
+    const userDropdown = document.querySelector('.user-dropdown');
+
+    if (userMenuBtn && userDropdown) {
+        userMenuBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            userDropdown.classList.toggle('show');
+
+            // Close other dropdowns if any
+            document.querySelectorAll('.dropdown:not(.user-dropdown)').forEach(dropdown => {
+                dropdown.classList.remove('show');
+            });
+        });
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!userMenuBtn.contains(e.target) && !userDropdown.contains(e.target)) {
+                userDropdown.classList.remove('show');
+            }
+        });
+
+        // Close dropdown when pressing Escape
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                userDropdown.classList.remove('show');
+            }
+        });
+
+        // Handle dropdown item clicks
+        const dropdownItems = userDropdown.querySelectorAll('.dropdown-item');
+        dropdownItems.forEach(item => {
+            item.addEventListener('click', () => {
+                userDropdown.classList.remove('show');
+            });
+        });
+    }
+
+    // Handle logout from dropdown
+    const logoutLink = document.getElementById('logout-link');
+    if (logoutLink) {
+        logoutLink.addEventListener('click', async (e) => {
+            e.preventDefault();
+            try {
+                await auth.signOut();
+                window.location.href = 'login.html';
+            } catch (error) {
+                console.error('Error signing out:', error);
+                showError('Error signing out. Please try again.');
+            }
+        });
+    }
+}
+
 // Handle create event form submission
 document.addEventListener('DOMContentLoaded', () => {
+    // Initialize sidebar toggle functionality
+    initializeSidebar();
+
+    // Initialize dropdown functionality
+    initializeDropdowns();
+
     const createEventForm = document.getElementById('createEventForm');
     if (createEventForm) {
         createEventForm.addEventListener('submit', async (e) => {
@@ -278,55 +440,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (closeBtn) {
         closeBtn.addEventListener('click', closeCreateEventModal);
     }
-
-    // Sidebar toggle for mobile
-    const menuToggle = document.querySelector('.menu-toggle');
-    const sidebar = document.querySelector('.sidebar');
-    if (menuToggle && sidebar) {
-        menuToggle.addEventListener('click', () => {
-            sidebar.classList.toggle('show');
-        });
-    }
-
-    // User dropdown toggle
-    const userMenuBtn = document.querySelector('.user-menu-btn');
-    const userDropdown = document.querySelector('.user-dropdown');
-    if (userMenuBtn && userDropdown) {
-        userMenuBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            userDropdown.classList.toggle('show');
-        });
-
-        // Close dropdown when clicking outside
-        document.addEventListener('click', () => {
-            userDropdown.classList.remove('show');
-        });
-    }
-
-    // Logout functionality
-    const logoutBtn = document.getElementById('logout-btn');
-    const logoutLink = document.getElementById('logout-link');
-    
-    const handleLogout = async () => {
-        try {
-            await auth.signOut();
-            window.location.href = 'login.html';
-        } catch (error) {
-            console.error('Error signing out:', error);
-            showError('Error signing out. Please try again.');
-        }
-    };
-
-    if (logoutBtn) {
-        logoutBtn.addEventListener('click', handleLogout);
-    }
-
-    if (logoutLink) {
-        logoutLink.addEventListener('click', (e) => {
-            e.preventDefault();
-            handleLogout();
-        });
-    }
 });
 
 // Toast notification functions
@@ -349,12 +462,12 @@ function showToast(message, type = 'info') {
         <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'}"></i>
         <span>${message}</span>
     `;
-    
+
     document.body.appendChild(toast);
-    
+
     // Trigger animation
     setTimeout(() => toast.classList.add('show'), 10);
-    
+
     // Remove after 3 seconds
     setTimeout(() => {
         toast.classList.remove('show');
@@ -371,12 +484,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const menuToggle = document.querySelector('.menu-toggle');
     const sidebar = document.querySelector('.sidebar');
     const mainContent = document.querySelector('.main-content');
-    
+
     if (menuToggle && sidebar) {
         menuToggle.addEventListener('click', (e) => {
             e.stopPropagation();
             sidebar.classList.toggle('show');
-            
+
             // Add overlay for mobile
             if (sidebar.classList.contains('show')) {
                 createOverlay();
@@ -436,12 +549,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 z-index: 1999;
                 animation: fadeIn 0.3s ease;
             `;
-            
+
             overlay.addEventListener('click', () => {
                 sidebar.classList.remove('show');
                 removeOverlay();
             });
-            
+
             document.body.appendChild(overlay);
         }
     }
@@ -614,7 +727,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (openModal) {
                 openModal.style.display = 'none';
             }
-            
+
             // Close sidebar on mobile
             if (window.innerWidth <= 768 && sidebar.classList.contains('show')) {
                 sidebar.classList.remove('show');
@@ -627,7 +740,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const focusableElements = document.querySelectorAll(
                 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
             );
-            
+
             const firstElement = focusableElements[0];
             const lastElement = focusableElements[focusableElements.length - 1];
 
@@ -637,7 +750,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const modalFocusable = openModal.querySelectorAll(
                     'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled])'
                 );
-                
+
                 if (modalFocusable.length > 0) {
                     const modalFirst = modalFocusable[0];
                     const modalLast = modalFocusable[modalFocusable.length - 1];
@@ -678,7 +791,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if ('onLine' in navigator) {
         function updateOnlineStatus() {
             const statusIndicator = document.querySelector('.network-status') || createNetworkStatusIndicator();
-            
+
             if (navigator.onLine) {
                 statusIndicator.textContent = '';
                 statusIndicator.style.display = 'none';
