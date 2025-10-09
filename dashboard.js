@@ -355,7 +355,7 @@ function initializeDropdowns() {
     }
 
     // Handle logout from dropdown
-    const logoutLink = document.getElementById('logout-link');
+    const logoutLink = document.getElementById('logout-btn');
     if (logoutLink) {
         logoutLink.addEventListener('click', async (e) => {
             e.preventDefault();

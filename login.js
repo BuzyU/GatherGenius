@@ -30,6 +30,23 @@ window.addEventListener('load', () => {
 
   const auth = firebase.auth();
 
+  // ================= CHECK EXISTING AUTH (Remember Me) =================
+  // This automatically checks if user is already logged in
+  auth.onAuthStateChanged((user) => {
+    if (user) {
+      console.log('User already logged in:', user.email);
+      // User is signed in, redirect to dashboard
+      showSuccess("Welcome back! Redirecting...");
+      setTimeout(() => {
+        window.location.href = "dashboard.html";
+      }, 500);
+    } else {
+      console.log('No user logged in');
+      // Hide loading overlay when auth state is determined
+      toggleLoading(false);
+    }
+  });
+
   // ================= HELPER FUNCTIONS =================
   const loadingOverlay = document.getElementById("loading-overlay");
   const errorToast = document.getElementById("error-toast");
@@ -45,7 +62,7 @@ window.addEventListener('load', () => {
       errorToast.textContent = message;
       errorToast.classList.remove("success");
       errorToast.classList.add("error", "show");
-      setTimeout(() => errorToast.classList.remove("show"), 3000);
+      setTimeout(() => errorToast.classList.remove("show"), 4000);
     }
     console.error(message);
   }
@@ -72,7 +89,8 @@ window.addEventListener('load', () => {
       "auth/cancelled-popup-request": "Google sign-in cancelled",
       "auth/popup-blocked": "Google sign-in popup blocked. Please allow popups for this site.",
       "auth/network-request-failed": "Network error. Please check your connection and try again",
-      "auth/invalid-credential": "Invalid email or password"
+      "auth/invalid-credential": "Invalid email or password",
+      "auth/too-many-requests": "Too many failed attempts. Please try again later"
     };
     return messages[code] || `An error occurred: ${code}`;
   }
@@ -87,6 +105,9 @@ window.addEventListener('load', () => {
       console.log('Google sign-in clicked');
       toggleLoading(true);
       try {
+        // Set persistence to LOCAL for Remember Me functionality
+        await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
+        
         const result = await auth.signInWithPopup(googleProvider);
         const user = result.user;
         console.log('Google sign-in successful:', user.email);
@@ -105,7 +126,6 @@ window.addEventListener('load', () => {
       } catch (err) {
         console.error('Google sign-in error:', err);
         showError(getErrorMessage(err.code));
-      } finally {
         toggleLoading(false);
       }
     });
@@ -130,10 +150,13 @@ window.addEventListener('load', () => {
       }
 
       try {
+        // Set persistence based on Remember Me checkbox
         const persistence = rememberMe
-          ? firebase.auth.Auth.Persistence.LOCAL
-          : firebase.auth.Auth.Persistence.SESSION;
+          ? firebase.auth.Auth.Persistence.LOCAL  // Persists even after browser close
+          : firebase.auth.Auth.Persistence.SESSION; // Only persists in current session
+        
         await auth.setPersistence(persistence);
+        console.log(`Persistence set to: ${rememberMe ? 'LOCAL (Remember Me)' : 'SESSION'}`);
 
         const result = await auth.signInWithEmailAndPassword(email, password);
         const user = result.user;
@@ -152,7 +175,6 @@ window.addEventListener('load', () => {
       } catch (err) {
         console.error('Login error:', err);
         showError(getErrorMessage(err.code));
-      } finally {
         toggleLoading(false);
       }
     });
@@ -189,6 +211,9 @@ window.addEventListener('load', () => {
       }
 
       try {
+        // Set persistence to LOCAL for new users (auto Remember Me)
+        await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
+        
         const result = await auth.createUserWithEmailAndPassword(email, password);
         const user = result.user;
         console.log('Signup successful:', user.email);
@@ -206,7 +231,6 @@ window.addEventListener('load', () => {
       } catch (err) {
         console.error('Signup error:', err);
         showError(getErrorMessage(err.code));
-      } finally {
         toggleLoading(false);
       }
     });
@@ -246,6 +270,54 @@ window.addEventListener('load', () => {
       const type = passwordInput.type === "password" ? "text" : "password";
       passwordInput.type = type;
       togglePasswordBtn.textContent = type === "password" ? "Show" : "Hide";
+    });
+  }
+
+  // ================= FORGOT PASSWORD =================
+  const forgotPasswordLink = document.querySelector(".forgot-password");
+  if (forgotPasswordLink) {
+    forgotPasswordLink.addEventListener("click", async (e) => {
+      e.preventDefault();
+      console.log('Forgot password clicked');
+      
+      const email = document.getElementById("email").value.trim();
+      
+      if (!email) {
+        showError("Please enter your email address first");
+        document.getElementById("email").focus();
+        return;
+      }
+      
+      // Validate email format
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        showError("Please enter a valid email address");
+        document.getElementById("email").focus();
+        return;
+      }
+      
+      // Confirm with user
+      const confirmReset = confirm(`Send password reset email to ${email}?`);
+      if (!confirmReset) {
+        return;
+      }
+      
+      toggleLoading(true);
+      
+      try {
+        await auth.sendPasswordResetEmail(email);
+        showSuccess(`Password reset email sent to ${email}. Check your inbox!`);
+        console.log('Password reset email sent successfully');
+      } catch (err) {
+        console.error('Password reset error:', err);
+        if (err.code === 'auth/user-not-found') {
+          showError("No account found with this email address");
+        } else {
+          showError(getErrorMessage(err.code));
+        }
+      } finally {
+        toggleLoading(false);
+      }
     });
   }
 
