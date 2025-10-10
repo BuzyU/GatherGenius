@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#ff6600">
+    <title>Teams - GatherGenius</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
+</head>
+<body>
+    <div class="dashboard-container">
+        <!-- Mobile Menu Toggle -->
+        <button class="mobile-menu-toggle" id="mobile-menu-toggle">
+            <i class="fas fa-bars"></i>
+        </button>
+        
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <img src="gatherlogo.jpeg" alt="GatherGenius" class="logo">
+                <button class="menu-toggle">
+                    <i class="fas fa-bars"></i>
+                </button>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="dashboard.html" class="nav-item">
+                    <i class="fas fa-home"></i>
+                    <span>Dashboard</span>
+                </a>
+                <a href="events.html" class="nav-item">
+                    <i class="fas fa-calendar-alt"></i>
+                    <span>Events</span>
+                </a>
+                <a href="teams.html" class="nav-item active">
+                    <i class="fas fa-users"></i>
+                    <span>Teams</span>
+                </a>
+                <a href="analytics.html" class="nav-item">
+                    <i class="fas fa-chart-bar"></i>
+                    <span>Analytics</span>
+                </a>
+                <a href="settings.html" class="nav-item">
+                    <i class="fas fa-cog"></i>
+                    <span>Settings</span>
+                </a>
+            </nav>
+            <button id="logout-btn" class="logout-btn">
+                <i class="fas fa-sign-out-alt"></i>
+                <span>Logout</span>
+            </button>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="content-header">
+                <div class="header-left">
+                    <h1>Teams</h1>
+                </div>
+                <div class="header-right">
+                    <button class="create-event-btn" onclick="showCreateTeamModal()">
+                        <i class="fas fa-plus"></i> Create Team
+                    </button>
+                    <div class="user-menu">
+                        <button class="user-menu-btn">
+                            <img id="user-avatar" src="https://ui-avatars.com/api/?background=0D8ABC&color=fff" alt="User">
+                            <span id="user-name">Guest</span>
+                            <i class="fas fa-chevron-down"></i>
+                        </button>
+                        <div class="user-dropdown">
+                            <a href="profile.html" class="dropdown-item">
+                                <i class="fas fa-user"></i>
+                                Profile
+                            </a>
+                            <a href="settings.html" class="dropdown-item">
+                                <i class="fas fa-cog"></i>
+                                Settings
+                            </a>
+                            <div class="dropdown-divider"></div>
+                            <a href="#" class="dropdown-item text-danger" id="logout-link">
+                                <i class="fas fa-sign-out-alt"></i>
+                                Logout
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <div class="teams-content">
+                <!-- Team Stats -->
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-users"></i>
+                        </div>
+                        <div class="stat-info">
+                            <h3>My Teams</h3>
+                            <p id="my-teams-count">0</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-user-friends"></i>
+                        </div>
+                        <div class="stat-info">
+                            <h3>Total Members</h3>
+                            <p id="total-members-count">0</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-envelope"></i>
+                        </div>
+                        <div class="stat-info">
+                            <h3>Pending Invites</h3>
+                            <p id="pending-invites-count">0</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-clock"></i>
+                        </div>
+                        <div class="stat-info">
+                            <h3>Pending Requests</h3>
+                            <p id="pending-requests-count">0</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Pending Invites Section -->
+                <div class="teams-section" id="invites-section" style="display: none;">
+                    <div class="section-header">
+                        <h2><i class="fas fa-envelope"></i> Pending Invitations</h2>
+                    </div>
+                    <div class="invites-grid" id="invites-grid">
+                        <!-- Invites will be populated here -->
+                    </div>
+                </div>
+
+                <!-- Teams List -->
+                <div class="teams-section">
+                    <div class="section-header">
+                        <h2><i class="fas fa-users"></i> My Teams</h2>
+                        <div class="filter-group">
+                            <select id="category-filter" onchange="applyFilters()">
+                                <option value="all">All Categories</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="teams-grid" id="teams-grid">
+                        <!-- Teams will be populated here -->
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Create Team Modal -->
+    <div id="createTeamModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Create New Team</h2>
+                <button class="close-modal" onclick="closeCreateTeamModal()">&times;</button>
+            </div>
+            <form id="createTeamForm">
+                <div class="form-group">
+                    <label for="teamName">Team Name</label>
+                    <input type="text" id="teamName" required>
+                </div>
+                <div class="form-group">
+                    <label for="teamCategory">Category</label>
+                    <select id="teamCategory" required>
+                        <option value="Sports">Sports</option>
+                        <option value="Cultural">Cultural</option>
+                        <option value="Technical">Technical</option>
+                        <option value="Academic">Academic</option>
+                        <option value="Social">Social</option>
+                        <option value="Custom">Custom Category</option>
+                    </select>
+                </div>
+                <div class="form-group" id="customCategoryGroup" style="display: none;">
+                    <label for="customCategory">Custom Category Name</label>
+                    <input type="text" id="customCategory">
+                </div>
+                <div class="form-group">
+                    <label for="teamDescription">Description</label>
+                    <textarea id="teamDescription" rows="4" required></textarea>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-secondary" onclick="closeCreateTeamModal()">Cancel</button>
+                    <button type="submit" class="btn-primary">Create Team</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Team Details Modal -->
+    <div id="teamDetailsModal" class="modal">
+        <div class="modal-content team-details-modal">
+            <div class="modal-header">
+                <h2 id="teamDetailsName">Team Name</h2>
+                <button class="close-modal" onclick="closeTeamDetailsModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="team-details-info">
+                    <p><strong>Category:</strong> <span id="teamDetailsCategory"></span></p>
+                    <p><strong>Description:</strong> <span id="teamDetailsDescription"></span></p>
+                    <p><strong>Created:</strong> <span id="teamDetailsCreated"></span></p>
+                </div>
+                
+                <div class="team-actions-section" id="ownerActionsSection" style="display: none;">
+                    <h3><i class="fas fa-user-plus"></i> Add Members</h3>
+                    <div class="search-member-section">
+                        <div class="search-box">
+                            <input type="text" id="memberSearch" placeholder="Search by name or email...">
+                            <button class="search-btn" onclick="searchUsers()">
+                                <i class="fas fa-search"></i>
+                            </button>
+                        </div>
+                        <div id="searchResults" class="search-results"></div>
+                    </div>
+                </div>
+
+                <div class="team-members-section">
+                    <h3><i class="fas fa-users"></i> Team Members (<span id="memberCount">0</span>)</h3>
+                    <div id="teamMembersList" class="team-members-list">
+                        <!-- Members will be populated here -->
+                    </div>
+                </div>
+
+                <div class="team-requests-section" id="requestsSection" style="display: none;">
+                    <h3><i class="fas fa-clock"></i> Pending Requests</h3>
+                    <div id="pendingRequestsList" class="pending-requests-list">
+                        <!-- Pending requests will be populated here -->
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer" id="ownerFooterActions" style="display: none;">
+                <button class="btn-danger" onclick="deleteTeam()">
+                    <i class="fas fa-trash"></i> Delete Team
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="teams.js"></script>
+</body>
+</html>
