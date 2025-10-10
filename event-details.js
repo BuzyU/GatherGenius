@@ -24,8 +24,8 @@ const eventId = new URLSearchParams(window.location.search).get('id');
 // Check if event ID exists
 if (!eventId) {
     console.error('No event ID provided');
-    showError('No event ID provided. Redirecting to dashboard...');
-    setTimeout(() => window.location.href = 'dashboard.html', 2000);
+    showError('No event ID provided. Redirecting to events...');
+    setTimeout(() => window.location.href = 'events.html', 2000);
 }
 
 // Check authentication and load event
@@ -62,7 +62,7 @@ async function loadEventDetails() {
         } else {
             console.error('Event not found');
             showError('Event not found');
-            setTimeout(() => window.location.href = 'dashboard.html', 2000);
+            setTimeout(() => window.location.href = 'events.html', 2000);
         }
     } catch (error) {
         console.error('Error loading event:', error);
@@ -74,10 +74,17 @@ async function loadEventDetails() {
 // Update UI based on user role
 function updateUIForUserRole() {
     const isOrganizer = currentUser && currentEvent.createdBy === currentUser.uid;
-    const eventActions = document.querySelector('.event-actions');
+    const organizerActions = document.getElementById('organizer-actions');
     
-    if (eventActions) {
-        eventActions.style.display = isOrganizer ? 'flex' : 'none';
+    if (organizerActions) {
+        organizerActions.style.display = isOrganizer ? 'flex' : 'none';
+    }
+    
+    // Update participants section visibility
+    const participantsSection = document.getElementById('participants-section');
+    if (participantsSection) {
+        // Only organizer can see all participants
+        participantsSection.style.display = isOrganizer ? 'block' : 'none';
     }
 }
 
@@ -91,7 +98,7 @@ function displayEventDetails(event) {
                    (eventDate.toDateString() === now.toDateString() ? 'in-progress' : 'completed');
     
     const statusElement = document.getElementById('event-status');
-    statusElement.textContent = status.charAt(0).toUpperCase() + status.slice(1);
+    statusElement.textContent = status.charAt(0).toUpperCase() + status.slice(1).replace('-', ' ');
     statusElement.className = `event-status ${status}`;
 
     document.getElementById('event-datetime').textContent = new Date(event.date).toLocaleString('en-IN', {
@@ -105,6 +112,10 @@ function displayEventDetails(event) {
     document.getElementById('event-team-size').textContent = `${event.teamSize || 0} members`;
     document.getElementById('event-cost').textContent = `₹${event.cost || 0}`;
     document.getElementById('event-description').textContent = event.description || 'No description provided';
+
+    // Update participant count
+    const participantCount = (event.participants || []).length;
+    document.getElementById('participant-count').textContent = participantCount;
 
     loadParticipants(event.participants || []);
     updateRegistrationStatus(event);
@@ -125,11 +136,86 @@ function loadParticipants(participants) {
             <div class="participant-info">
                 <h4>${participant.name}</h4>
                 <p>${participant.email}</p>
-                ${participant.registeredAt ? `<small>Registered: ${new Date(participant.registeredAt).toLocaleDateString()}</small>` : ''}
+                ${participant.registeredAt ? `<small>Registered: ${new Date(participant.registeredAt).toLocaleDateString('en-IN')}</small>` : ''}
             </div>
         </div>
     `).join('');
 }
+
+// Download participants as Excel (Organizer only)
+window.downloadParticipants = function() {
+    if (!currentUser || !currentEvent || currentEvent.createdBy !== currentUser.uid) {
+        showError('Only the event organizer can download participant data');
+        return;
+    }
+
+    const participants = currentEvent.participants || [];
+    
+    if (participants.length === 0) {
+        showError('No participants to download');
+        return;
+    }
+
+    try {
+        // Prepare data for Excel
+        const excelData = participants.map((participant, index) => ({
+            'S.No': index + 1,
+            'Name': participant.name || 'N/A',
+            'Email': participant.email || 'N/A',
+            'Phone': participant.phone || 'N/A',
+            'Registered On': participant.registeredAt ? 
+                new Date(participant.registeredAt).toLocaleDateString('en-IN') : 'N/A',
+            'Time': participant.registeredAt ? 
+                new Date(participant.registeredAt).toLocaleTimeString('en-IN') : 'N/A'
+        }));
+
+        // Create worksheet
+        const worksheet = XLSX.utils.json_to_sheet(excelData);
+        
+        // Set column widths
+        const columnWidths = [
+            { wch: 8 },  // S.No
+            { wch: 25 }, // Name
+            { wch: 30 }, // Email
+            { wch: 15 }, // Phone
+            { wch: 15 }, // Registered On
+            { wch: 15 }  // Time
+        ];
+        worksheet['!cols'] = columnWidths;
+
+        // Create workbook
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, 'Participants');
+
+        // Add event info sheet
+        const eventInfo = [
+            { 'Field': 'Event Name', 'Value': currentEvent.name },
+            { 'Field': 'Date', 'Value': new Date(currentEvent.date).toLocaleDateString('en-IN') },
+            { 'Field': 'Time', 'Value': new Date(currentEvent.date).toLocaleTimeString('en-IN') },
+            { 'Field': 'Location', 'Value': currentEvent.location },
+            { 'Field': 'Team Size', 'Value': currentEvent.teamSize },
+            { 'Field': 'Cost', 'Value': `₹${currentEvent.cost}` },
+            { 'Field': 'Total Participants', 'Value': participants.length },
+            { 'Field': 'Downloaded On', 'Value': new Date().toLocaleString('en-IN') }
+        ];
+        const infoSheet = XLSX.utils.json_to_sheet(eventInfo);
+        infoSheet['!cols'] = [{ wch: 20 }, { wch: 40 }];
+        XLSX.utils.book_append_sheet(workbook, infoSheet, 'Event Info');
+
+        // Generate filename
+        const sanitizedEventName = currentEvent.name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+        const timestamp = new Date().toISOString().slice(0, 10);
+        const filename = `${sanitizedEventName}_participants_${timestamp}.xlsx`;
+
+        // Download file
+        XLSX.writeFile(workbook, filename);
+        
+        showSuccess(`Downloaded ${participants.length} participants successfully!`);
+    } catch (error) {
+        console.error('Error downloading participants:', error);
+        showError('Error creating Excel file: ' + error.message);
+    }
+};
 
 // Update registration status
 function updateRegistrationStatus(event) {
@@ -146,7 +232,7 @@ function updateRegistrationStatus(event) {
         const maxParticipants = event.teamSize * (event.maxTeams || 10);
         registrationStatus.innerHTML = `
             <div class="organizer-info">
-                <p class="registration-info">Total registered: ${participants.length} / ${maxParticipants}</p>
+                <p class="registration-info"><strong>Total registered:</strong> ${participants.length} / ${maxParticipants}</p>
                 <div class="registration-url-section">
                     <h4>Registration Link</h4>
                     <div class="url-copy-container">
@@ -188,8 +274,20 @@ window.copyRegistrationUrl = function() {
     const urlInput = document.getElementById('registration-url');
     urlInput.select();
     urlInput.setSelectionRange(0, 99999);
-    document.execCommand('copy');
-    showSuccess('Registration link copied to clipboard!');
+    
+    // Modern clipboard API
+    if (navigator.clipboard) {
+        navigator.clipboard.writeText(urlInput.value).then(() => {
+            showSuccess('Registration link copied to clipboard!');
+        }).catch(() => {
+            // Fallback
+            document.execCommand('copy');
+            showSuccess('Registration link copied to clipboard!');
+        });
+    } else {
+        document.execCommand('copy');
+        showSuccess('Registration link copied to clipboard!');
+    }
 };
 
 // Show edit event modal
@@ -203,19 +301,31 @@ window.editEventModal = function() {
     
     // Populate form fields
     document.getElementById('editEventName').value = currentEvent.name || '';
-    document.getElementById('editEventDate').value = currentEvent.date ? 
-        new Date(currentEvent.date).toISOString().slice(0, 16) : '';
+    
+    // Convert date to datetime-local format
+    if (currentEvent.date) {
+        const eventDate = new Date(currentEvent.date);
+        const localDateTime = new Date(eventDate.getTime() - (eventDate.getTimezoneOffset() * 60000))
+            .toISOString()
+            .slice(0, 16);
+        document.getElementById('editEventDate').value = localDateTime;
+    }
+    
     document.getElementById('editEventLocation').value = currentEvent.location || '';
     document.getElementById('editTeamSize').value = currentEvent.teamSize || '';
     document.getElementById('editEventCost').value = currentEvent.cost || '';
     document.getElementById('editEventDescription').value = currentEvent.description || '';
 
+    modal.classList.add('show');
     modal.style.display = 'flex';
 };
 
 // Close edit modal
 window.closeEditEventModal = function() {
-    document.getElementById('editEventModal').style.display = 'none';
+    const modal = document.getElementById('editEventModal');
+    modal.classList.remove('show');
+    modal.style.display = 'none';
+    document.getElementById('editEventForm').reset();
 };
 
 // Handle edit form submission
@@ -246,13 +356,26 @@ async function updateEvent() {
     submitButton.disabled = true;
 
     try {
+        const name = document.getElementById('editEventName').value.trim();
+        const date = document.getElementById('editEventDate').value;
+        const location = document.getElementById('editEventLocation').value.trim();
+        const teamSize = parseInt(document.getElementById('editTeamSize').value);
+        const cost = parseFloat(document.getElementById('editEventCost').value);
+        const description = document.getElementById('editEventDescription').value.trim();
+
+        // Validation
+        if (!name || !date || !location || !teamSize || teamSize < 1) {
+            showError('Please fill all required fields correctly');
+            return;
+        }
+
         const updatedData = {
-            name: document.getElementById('editEventName').value,
-            date: document.getElementById('editEventDate').value,
-            location: document.getElementById('editEventLocation').value,
-            teamSize: parseInt(document.getElementById('editTeamSize').value),
-            cost: parseFloat(document.getElementById('editEventCost').value),
-            description: document.getElementById('editEventDescription').value,
+            name,
+            date,
+            location,
+            teamSize,
+            cost,
+            description,
             lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
         };
 
@@ -276,12 +399,16 @@ window.deleteConfirmModal = function() {
         showError('Only the event organizer can delete this event');
         return;
     }
-    document.getElementById('deleteConfirmModal').style.display = 'flex';
+    const modal = document.getElementById('deleteConfirmModal');
+    modal.classList.add('show');
+    modal.style.display = 'flex';
 };
 
 // Close delete modal
 window.closeDeleteConfirmModal = function() {
-    document.getElementById('deleteConfirmModal').style.display = 'none';
+    const modal = document.getElementById('deleteConfirmModal');
+    modal.classList.remove('show');
+    modal.style.display = 'none';
 };
 
 // Delete event from Firestore
@@ -292,17 +419,24 @@ window.deleteEvent = async function() {
         return;
     }
 
+    const deleteButton = document.querySelector('#deleteConfirmModal .btn-danger');
+    const originalText = deleteButton.innerHTML;
+    deleteButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Deleting...';
+    deleteButton.disabled = true;
+
     try {
         await db.collection('events').doc(eventId).delete();
         closeDeleteConfirmModal();
         showSuccess('Event deleted successfully!');
         
         setTimeout(() => {
-            window.location.href = 'dashboard.html';
+            window.location.href = 'events.html';
         }, 1500);
     } catch (error) {
         console.error('Error deleting event:', error);
         showError('Error deleting event: ' + error.message);
+        deleteButton.innerHTML = originalText;
+        deleteButton.disabled = false;
     }
 };
 
@@ -343,7 +477,7 @@ window.registerForEvent = async function() {
             uid: user.uid,
             name: user.displayName || user.email.split('@')[0],
             email: user.email,
-            photoURL: user.photoURL,
+            photoURL: user.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.displayName || user.email)}`,
             registeredAt: new Date().toISOString()
         };
 
@@ -357,6 +491,38 @@ window.registerForEvent = async function() {
         console.error('Error registering for event:', error);
         showError('Error registering for event: ' + error.message);
     }
+};
+
+window.editRegistrationForm = function() {
+    if (!currentUser || !currentEvent || currentEvent.createdBy !== currentUser.uid) {
+        showError('Only the event organizer can edit the registration form');
+        return;
+    }
+    window.location.href = `registration.html?id=${eventId}`;
+};
+
+window.exportEvent = function() {
+    if (!currentEvent) return;
+    
+    const exportData = {
+        event: currentEvent,
+        exportedAt: new Date().toISOString(),
+        exportedBy: currentUser.email
+    };
+    
+    const dataStr = JSON.stringify(exportData, null, 2);
+    const dataBlob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(dataBlob);
+    
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${currentEvent.name.replace(/[^a-z0-9]/gi, '_')}_export.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    
+    showSuccess('Event exported successfully!');
 };
 
 // Show/hide loading state
@@ -397,20 +563,25 @@ function showToast(message, type = 'info') {
     
     const toast = document.createElement('div');
     toast.className = `toast toast-${type}`;
+    
+    const icon = type === 'success' ? 'fa-check-circle' : 
+                 type === 'error' ? 'fa-exclamation-circle' : 
+                 type === 'warning' ? 'fa-exclamation-triangle' : 'fa-info-circle';
+    
     toast.innerHTML = `
         <div class="toast-content">
-            <i class="fas ${type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle'}"></i>
+            <i class="fas ${icon}"></i>
             <span>${message}</span>
         </div>
-        <button class="toast-close" onclick="this.parentElement.remove()">×</button>
     `;
     
     document.body.appendChild(toast);
     
+    setTimeout(() => toast.classList.add('show'), 100);
+    
     setTimeout(() => {
-        if (toast.parentElement) {
-            toast.remove();
-        }
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 300);
     }, 5000);
 }
 
@@ -420,13 +591,16 @@ function initializeLogout() {
     if (logoutBtn) {
         logoutBtn.addEventListener('click', async (e) => {
             e.preventDefault();
-            try {
-                await auth.signOut();
-                sessionStorage.clear();
-                window.location.href = 'login.html';
-            } catch (error) {
-                console.error('Error signing out:', error);
-                showError('Error signing out');
+            if (confirm('Are you sure you want to logout?')) {
+                try {
+                    await auth.signOut();
+                    sessionStorage.clear();
+                    localStorage.clear();
+                    window.location.href = 'login.html';
+                } catch (error) {
+                    console.error('Error signing out:', error);
+                    showError('Error signing out');
+                }
             }
         });
     }
@@ -440,19 +614,25 @@ function initializeSidebar() {
     
     if (!sidebar || !dashboardContainer) return;
     
-    const overlay = document.createElement('div');
-    overlay.className = 'sidebar-overlay';
-    dashboardContainer.appendChild(overlay);
+    // Create overlay if it doesn't exist
+    let overlay = document.querySelector('.sidebar-overlay');
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.className = 'sidebar-overlay';
+        document.body.appendChild(overlay);
+    }
     
     function toggleSidebar() {
+        sidebar.classList.toggle('show');
         sidebar.classList.toggle('active');
-        overlay.classList.toggle('active');
-        document.body.style.overflow = sidebar.classList.contains('active') ? 'hidden' : '';
+        overlay.classList.toggle('show');
+        document.body.style.overflow = sidebar.classList.contains('show') ? 'hidden' : '';
     }
     
     function closeSidebar() {
+        sidebar.classList.remove('show');
         sidebar.classList.remove('active');
-        overlay.classList.remove('active');
+        overlay.classList.remove('show');
         document.body.style.overflow = '';
     }
     
@@ -462,6 +642,7 @@ function initializeSidebar() {
     
     overlay.addEventListener('click', closeSidebar);
     
+    // Close sidebar when clicking nav items on mobile
     const navItems = document.querySelectorAll('.nav-item');
     navItems.forEach(item => {
         item.addEventListener('click', () => {
@@ -471,15 +652,39 @@ function initializeSidebar() {
         });
     });
     
+    // Close sidebar on window resize
     window.addEventListener('resize', () => {
         if (window.innerWidth > 1024) {
             closeSidebar();
         }
     });
     
+    // Close sidebar on ESC key
     document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && sidebar.classList.contains('active')) {
+        if (e.key === 'Escape' && sidebar.classList.contains('show')) {
             closeSidebar();
         }
     });
 }
+
+// Close modals on ESC key
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        const openModals = document.querySelectorAll('.modal.show');
+        openModals.forEach(modal => {
+            if (modal.id === 'editEventModal') closeEditEventModal();
+            if (modal.id === 'deleteConfirmModal') closeDeleteConfirmModal();
+        });
+    }
+});
+
+// Close modals when clicking outside
+document.addEventListener('click', (e) => {
+    const modals = document.querySelectorAll('.modal');
+    modals.forEach(modal => {
+        if (e.target === modal) {
+            if (modal.id === 'editEventModal') closeEditEventModal();
+            if (modal.id === 'deleteConfirmModal') closeDeleteConfirmModal();
+        }
+    });
+});

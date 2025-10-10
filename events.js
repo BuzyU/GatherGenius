@@ -29,6 +29,7 @@ db.enablePersistence({ synchronizeTabs: true })
 
 let allEvents = [];
 let currentEditEventId = null;
+let currentUser = null;
 
 // Check authentication
 auth.onAuthStateChanged((user) => {
@@ -37,6 +38,7 @@ auth.onAuthStateChanged((user) => {
         return;
     }
 
+    currentUser = user;
     updateUserInterface(user);
     loadEvents();
 });
@@ -79,7 +81,7 @@ async function loadEvents() {
 // Apply filters and display events
 function applyFiltersAndDisplay() {
     const statusFilter = document.getElementById('status-filter')?.value || 'all';
-    const sortFilter = document.getElementById('sort-filter')?.value || 'date-desc';
+    const sortFilter = document.getElementById('sort-filter')?.value || 'ownership';
     const searchInput = document.querySelector('.search-box input');
     const searchTerm = searchInput ? searchInput.value.toLowerCase() : '';
 
@@ -88,7 +90,8 @@ function applyFiltersAndDisplay() {
         const matchesSearch = !searchTerm || 
             event.name.toLowerCase().includes(searchTerm) ||
             event.location.toLowerCase().includes(searchTerm) ||
-            (event.description && event.description.toLowerCase().includes(searchTerm));
+            (event.description && event.description.toLowerCase().includes(searchTerm)) ||
+            (event.category && event.category.toLowerCase().includes(searchTerm));
 
         if (!matchesSearch) return false;
 
@@ -103,22 +106,44 @@ function applyFiltersAndDisplay() {
     });
 
     // Sort events
-    filteredEvents.sort((a, b) => {
-        switch (sortFilter) {
-            case 'date-asc':
-                return new Date(a.date) - new Date(b.date);
-            case 'date-desc':
-                return new Date(b.date) - new Date(a.date);
-            case 'name-asc':
-                return a.name.localeCompare(b.name);
-            case 'name-desc':
-                return b.name.localeCompare(a.name);
-            default:
-                return 0;
-        }
-    });
+    filteredEvents = sortEvents(filteredEvents, sortFilter);
 
     displayEvents(filteredEvents);
+}
+
+// Sort events with ownership priority
+function sortEvents(events, sortType) {
+    if (!currentUser) return events;
+
+    // Separate user's events and others
+    const userEvents = events.filter(e => e.createdBy === currentUser.uid);
+    const otherEvents = events.filter(e => e.createdBy !== currentUser.uid);
+
+    // Apply sorting to each group
+    const sortFunction = getSortFunction(sortType);
+    userEvents.sort(sortFunction);
+    otherEvents.sort(sortFunction);
+
+    // Return user events first, then others
+    return [...userEvents, ...otherEvents];
+}
+
+// Get sort function based on type
+function getSortFunction(sortType) {
+    switch (sortType) {
+        case 'date-asc':
+            return (a, b) => new Date(a.date) - new Date(b.date);
+        case 'date-desc':
+            return (a, b) => new Date(b.date) - new Date(a.date);
+        case 'name-asc':
+            return (a, b) => a.name.localeCompare(b.name);
+        case 'name-desc':
+            return (a, b) => b.name.localeCompare(a.name);
+        case 'ownership':
+        default:
+            // Sort by creation date within each group
+            return (a, b) => new Date(b.createdAt?.toDate?.() || b.createdAt) - new Date(a.createdAt?.toDate?.() || a.createdAt);
+    }
 }
 
 // Display events in grid
@@ -141,13 +166,19 @@ function displayEvents(events) {
         const now = new Date();
         const status = eventDate > now ? 'upcoming' : 
                       (eventDate.toDateString() === now.toDateString() ? 'in-progress' : 'completed');
+        
+        const isOwner = currentUser && event.createdBy === currentUser.uid;
+        const categoryBadge = event.category ? `<span class="category-badge" data-category="${event.category}">${event.category}</span>` : '';
 
         return `
             <div class="event-card ${status}" data-id="${event.id}">
                 <div class="event-header">
                     <div class="event-title">
-                        <h3>${event.name}</h3>
-                        <span class="event-status ${status}">${status}</span>
+                        <h3>${event.name} ${isOwner ? '<span class="owner-badge">Your Event</span>' : ''}</h3>
+                        <div class="event-badges">
+                            ${categoryBadge}
+                            <span class="event-status ${status}">${status}</span>
+                        </div>
                     </div>
                     <span class="event-date">${formatDate(event.date)}</span>
                 </div>
@@ -164,12 +195,14 @@ function displayEvents(events) {
                     <button class="btn-primary" onclick="viewEventDetails('${event.id}')">
                         <i class="fas fa-eye"></i> View Details
                     </button>
+                    ${isOwner ? `
                     <button class="btn-secondary" onclick="editEventModal('${event.id}')">
                         <i class="fas fa-edit"></i> Edit
                     </button>
                     <button class="btn-danger" onclick="deleteEvent('${event.id}')">
                         <i class="fas fa-trash"></i> Delete
                     </button>
+                    ` : ''}
                 </div>
             </div>
         `;
@@ -202,7 +235,6 @@ window.viewEventDetails = function(id) {
 
 // Show edit event modal
 window.editEventModal = async function(id) {
-    currentEditEventId = id;
     const event = allEvents.find(e => e.id === id);
     
     if (!event) {
@@ -210,6 +242,13 @@ window.editEventModal = async function(id) {
         return;
     }
 
+    // Check if user is the owner
+    if (currentUser && event.createdBy !== currentUser.uid) {
+        showError('You can only edit your own events');
+        return;
+    }
+
+    currentEditEventId = id;
     const modal = document.getElementById('createEventModal');
     const modalTitle = modal.querySelector('.modal-header h2');
     const submitButton = modal.querySelector('button[type="submit"]');
@@ -227,6 +266,7 @@ window.editEventModal = async function(id) {
     document.getElementById('maxTeams').value = event.maxTeams || 10;
     document.getElementById('eventCost').value = event.cost || '';
     document.getElementById('eventDescription').value = event.description || '';
+    document.getElementById('eventCategory').value = event.category || 'Sports';
 
     modal.style.display = 'flex';
 };
@@ -262,6 +302,19 @@ window.showCreateEventModal = function() {
 
 // Delete event
 window.deleteEvent = async function(id) {
+    const event = allEvents.find(e => e.id === id);
+    
+    if (!event) {
+        showError('Event not found');
+        return;
+    }
+
+    // Check if user is the owner
+    if (currentUser && event.createdBy !== currentUser.uid) {
+        showError('You can only delete your own events');
+        return;
+    }
+
     const confirmDelete = confirm(
         'Are you sure you want to delete this event? This action cannot be undone.'
     );
@@ -470,7 +523,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     teamSize: parseInt(document.getElementById('teamSize').value),
                     maxTeams: parseInt(document.getElementById('maxTeams')?.value || 10),
                     cost: parseFloat(document.getElementById('eventCost').value),
-                    description: document.getElementById('eventDescription').value
+                    description: document.getElementById('eventDescription').value,
+                    category: document.getElementById('eventCategory').value
                 };
 
                 if (currentEditEventId) {

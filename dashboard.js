@@ -22,6 +22,7 @@ const db = firebase.firestore();
 
 // Global variables
 let currentEditEventId = null;
+let currentUser = null;
 
 // Enable offline persistence
 db.enablePersistence({ synchronizeTabs: true })
@@ -40,10 +41,8 @@ auth.onAuthStateChanged(async (user) => {
         return;
     }
 
-    // Update user interface
+    currentUser = user;
     updateUserInterface(user);
-
-    // Load dashboard data
     await loadDashboardData();
 });
 
@@ -75,27 +74,53 @@ async function loadDashboardData() {
             events.push({ id: doc.id, ...doc.data() });
         });
 
+        const sortedEvents = sortEventsByOwnership(events);
         updateStats(events);
-        displayRecentEvents(events.slice(0, 6)); // Show only 6 recent events
+        displayRecentEvents(sortedEvents.slice(0, 6));
     } catch (error) {
         console.error('Error loading dashboard data:', error);
         showError('Error loading dashboard data. Please refresh the page.');
     }
 }
 
-// Update statistics
+// Sort events by ownership (user's events first)
+function sortEventsByOwnership(events) {
+    if (!currentUser) return events;
+
+    const userEvents = events.filter(e => e.createdBy === currentUser.uid);
+    const otherEvents = events.filter(e => e.createdBy !== currentUser.uid);
+
+    userEvents.sort((a, b) => new Date(b.createdAt?.toDate?.() || b.createdAt) - new Date(a.createdAt?.toDate?.() || a.createdAt));
+    otherEvents.sort((a, b) => new Date(b.createdAt?.toDate?.() || b.createdAt) - new Date(a.createdAt?.toDate?.() || a.createdAt));
+
+    return [...userEvents, ...otherEvents];
+}
+
+// Update statistics - FIXED for participated events
 function updateStats(events) {
     const now = new Date();
-    const totalEvents = events.length;
-    const upcomingEvents = events.filter(e => new Date(e.date) > now).length;
-    const totalParticipants = events.reduce((sum, e) => sum + (e.participants?.length || 0), 0);
-    const avgTeamSize = events.length > 0
-        ? (events.reduce((sum, e) => sum + (e.teamSize || 0), 0) / events.length).toFixed(1)
+
+    // Total events created by user
+    const totalEvents = events.filter(e => e.createdBy === currentUser.uid).length;
+
+    // Upcoming events created by user
+    const upcomingEvents = events.filter(e =>
+        e.createdBy === currentUser.uid && new Date(e.date) > now
+    ).length;
+
+    // Events user has participated in (registered for)
+    const participatedEvents = events.filter(e =>
+        e.participants && e.participants.some(p => p.uid === currentUser.uid)
+    );
+
+    // Calculate average team size of participated events
+    const avgTeamSize = participatedEvents.length > 0
+        ? (participatedEvents.reduce((sum, e) => sum + (e.teamSize || 0), 0) / participatedEvents.length).toFixed(1)
         : 0;
 
     document.getElementById('total-events').textContent = totalEvents;
     document.getElementById('upcoming-events').textContent = upcomingEvents;
-    document.getElementById('total-participants').textContent = totalParticipants;
+    document.getElementById('total-participants').textContent = participatedEvents.length;
     document.getElementById('avg-team-size').textContent = avgTeamSize;
 }
 
@@ -109,20 +134,24 @@ function displayRecentEvents(events) {
         return;
     }
 
-    const sortedEvents = events.sort((a, b) => new Date(b.createdAt?.toDate?.() || b.createdAt) - new Date(a.createdAt?.toDate?.() || a.createdAt));
-
-    eventsGrid.innerHTML = sortedEvents.map(event => {
+    eventsGrid.innerHTML = events.map(event => {
         const eventDate = new Date(event.date);
         const now = new Date();
         const status = eventDate > now ? 'upcoming' :
             (eventDate.toDateString() === now.toDateString() ? 'in-progress' : 'completed');
 
+        const isOwner = currentUser && event.createdBy === currentUser.uid;
+        const categoryBadge = event.category ? `<span class="category-badge">${event.category}</span>` : '';
+
         return `
         <div class="event-card ${status}" data-id="${event.id}">
             <div class="event-header">
                 <div class="event-title">
-                    <h3>${event.name}</h3>
-                    <span class="event-status ${status}">${status}</span>
+                    <h3>${event.name} ${isOwner ? '<span class="owner-badge">Your Event</span>' : ''}</h3>
+                    <div class="event-badges">
+                        ${categoryBadge}
+                        <span class="event-status ${status}">${status}</span>
+                    </div>
                 </div>
                 <span class="event-date">${formatDate(event.date)}</span>
             </div>
@@ -139,16 +168,71 @@ function displayRecentEvents(events) {
                 <button class="btn-primary" onclick="viewEventDetails('${event.id}')">
                     <i class="fas fa-eye"></i> View Details
                 </button>
+                ${isOwner ? `
                 <button class="btn-secondary" onclick="editEvent('${event.id}')">
                     <i class="fas fa-edit"></i> Edit
                 </button>
                 <button class="btn-danger" onclick="deleteEvent('${event.id}')">
                     <i class="fas fa-trash"></i> Delete
                 </button>
+                ` : ''}
             </div>
         </div>
         `}).join('');
 }
+
+// Import Events functionality
+window.showImportEventsModal = function () {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.onchange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        try {
+            const text = await file.text();
+            const data = JSON.parse(text);
+
+            let eventsToImport = [];
+
+            if (Array.isArray(data.events)) {
+                // Bulk import format
+                eventsToImport = data.events;
+            } else if (data.event) {
+                // Single export format
+                eventsToImport = [data.event];
+            } else {
+                showError('Invalid file format');
+                return;
+            }
+
+            let imported = 0;
+            for (const event of eventsToImport) {
+                await db.collection('events').add({
+                    ...event,
+                    createdBy: currentUser.uid,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    participants: []
+                });
+                imported++;
+            }
+
+            showSuccess(`Successfully imported ${imported} event(s)!`);
+            await loadDashboardData();
+        } catch (error) {
+            console.error('Error importing events:', error);
+            showError('Error importing events: ' + error.message);
+        }
+    };
+    input.click();
+};
+
+
+// View Reports functionality
+window.showReportEventsModal = function () {
+    window.location.href = 'reports.html';
+};
 
 // Format date helper
 function formatDate(dateStr) {
@@ -169,6 +253,11 @@ function truncateText(text, maxLength) {
     return text.substr(0, maxLength) + '...';
 }
 
+// View event details
+window.viewEventDetails = function (id) {
+    window.location.href = `event-details.html?id=${id}`;
+};
+
 // Show create event modal
 window.showCreateEventModal = function () {
     currentEditEventId = null;
@@ -176,11 +265,9 @@ window.showCreateEventModal = function () {
     const modalTitle = modal.querySelector('.modal-header h2');
     const submitButton = modal.querySelector('button[type="submit"]');
 
-    // Reset to create mode
     modalTitle.textContent = 'Create New Event';
     submitButton.innerHTML = '<i class="fas fa-plus"></i> Create Event';
 
-    // Clear form
     document.getElementById('createEventForm').reset();
     modal.style.display = 'flex';
 };
@@ -191,7 +278,6 @@ window.closeCreateEventModal = function () {
     const modalTitle = modal.querySelector('.modal-header h2');
     const submitButton = modal.querySelector('button[type="submit"]');
 
-    // Reset to create mode
     modalTitle.textContent = 'Create New Event';
     submitButton.innerHTML = '<i class="fas fa-plus"></i> Create Event';
     currentEditEventId = null;
@@ -207,9 +293,14 @@ window.editEvent = async function (id) {
     if (!event.exists) return showError('Event not found');
 
     const data = event.data();
+
+    if (currentUser && data.createdBy !== currentUser.uid) {
+        showError('You can only edit your own events');
+        return;
+    }
+
     const modal = document.getElementById('createEventModal');
 
-    // Populate form fields
     document.getElementById('eventName').value = data.name;
     document.getElementById('eventDate').value = new Date(data.date).toISOString().slice(0, 16);
     document.getElementById('eventLocation').value = data.location;
@@ -217,8 +308,8 @@ window.editEvent = async function (id) {
     document.getElementById('maxTeams').value = data.maxTeams || 10;
     document.getElementById('eventCost').value = data.cost;
     document.getElementById('eventDescription').value = data.description;
+    document.getElementById('eventCategory').value = data.category || 'Sports';
 
-    // Change to edit mode
     const modalTitle = modal.querySelector('.modal-header h2');
     const submitButton = modal.querySelector('button[type="submit"]');
     modalTitle.textContent = 'Edit Event';
@@ -229,6 +320,19 @@ window.editEvent = async function (id) {
 
 // Delete event
 window.deleteEvent = async function (id) {
+    const event = await db.collection('events').doc(id).get();
+    if (!event.exists) {
+        showError('Event not found');
+        return;
+    }
+
+    const data = event.data();
+
+    if (currentUser && data.createdBy !== currentUser.uid) {
+        showError('You can only delete your own events');
+        return;
+    }
+
     const confirmDelete = confirm(
         'Are you sure you want to delete this event? This action cannot be undone.'
     );
@@ -244,13 +348,11 @@ window.deleteEvent = async function (id) {
     }
 };
 
-// ================= LOGOUT FUNCTIONALITY =================
-// Unified logout function that works for both buttons
+// Unified logout function
 async function handleLogout() {
     try {
         console.log('Logging out...');
         await auth.signOut();
-        // Clear session storage
         sessionStorage.clear();
         console.log('Logout successful');
         window.location.href = 'login.html';
@@ -260,7 +362,7 @@ async function handleLogout() {
     }
 }
 
-// Global close sidebar function (accessible from HTML onclick)
+// Global close sidebar function
 window.closeSidebar = function () {
     const sidebar = document.querySelector('.sidebar');
     const overlay = document.querySelector('.sidebar-overlay');
@@ -285,7 +387,6 @@ function initializeSidebar() {
     const mobileMenuToggle = document.querySelector('#mobile-menu-toggle');
     const dashboardContainer = document.querySelector('.dashboard-container');
 
-    // Create overlay element
     const overlay = document.createElement('div');
     overlay.className = 'sidebar-overlay';
     overlay.style.cssText = `
@@ -302,7 +403,6 @@ function initializeSidebar() {
     `;
     dashboardContainer.appendChild(overlay);
 
-    // Toggle sidebar function
     function toggleSidebar() {
         sidebar.classList.toggle('active');
 
@@ -316,7 +416,7 @@ function initializeSidebar() {
             document.body.style.overflow = '';
         }
     }
-    // Event listeners for both menu toggles
+
     if (menuToggle) {
         menuToggle.addEventListener('click', toggleSidebar);
     }
@@ -325,10 +425,8 @@ function initializeSidebar() {
         mobileMenuToggle.addEventListener('click', toggleSidebar);
     }
 
-    // Close sidebar when clicking overlay
     overlay.addEventListener('click', window.closeSidebar);
 
-    // Close sidebar when clicking nav links on mobile
     const navItems = document.querySelectorAll('.nav-item');
     navItems.forEach(item => {
         item.addEventListener('click', () => {
@@ -338,14 +436,12 @@ function initializeSidebar() {
         });
     });
 
-    // Handle window resize
     window.addEventListener('resize', () => {
         if (window.innerWidth > 768) {
             window.closeSidebar();
         }
     });
 
-    // Handle escape key
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape' && sidebar.classList.contains('active')) {
             window.closeSidebar();
@@ -355,7 +451,6 @@ function initializeSidebar() {
 
 // Initialize dropdown functionality
 function initializeDropdowns() {
-    // User dropdown toggle
     const userMenuBtn = document.querySelector('.user-menu-btn');
     const userDropdown = document.querySelector('.user-dropdown');
 
@@ -364,27 +459,23 @@ function initializeDropdowns() {
             e.stopPropagation();
             userDropdown.classList.toggle('show');
 
-            // Close other dropdowns if any
             document.querySelectorAll('.dropdown:not(.user-dropdown)').forEach(dropdown => {
                 dropdown.classList.remove('show');
             });
         });
 
-        // Close dropdown when clicking outside
         document.addEventListener('click', (e) => {
             if (!userMenuBtn.contains(e.target) && !userDropdown.contains(e.target)) {
                 userDropdown.classList.remove('show');
             }
         });
 
-        // Close dropdown when pressing Escape
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
                 userDropdown.classList.remove('show');
             }
         });
 
-        // Handle dropdown item clicks
         const dropdownItems = userDropdown.querySelectorAll('.dropdown-item');
         dropdownItems.forEach(item => {
             item.addEventListener('click', () => {
@@ -396,65 +487,35 @@ function initializeDropdowns() {
 
 // Initialize logout buttons
 function initializeLogoutButtons() {
-    // Sidebar logout button
     const sidebarLogoutBtn = document.getElementById('logout-btn');
     if (sidebarLogoutBtn) {
         sidebarLogoutBtn.addEventListener('click', async (e) => {
             e.preventDefault();
             await handleLogout();
         });
-        console.log('Sidebar logout button initialized');
     }
 
-    // Dropdown logout link
     const dropdownLogoutLink = document.getElementById('logout-link');
     if (dropdownLogoutLink) {
         dropdownLogoutLink.addEventListener('click', async (e) => {
             e.preventDefault();
             await handleLogout();
         });
-        console.log('Dropdown logout link initialized');
     }
-
-    // Also handle any other logout buttons with class 'logout-btn'
-    const allLogoutBtns = document.querySelectorAll('.logout-btn, .logout-link, [data-logout]');
-    allLogoutBtns.forEach(btn => {
-        btn.addEventListener('click', async (e) => {
-            e.preventDefault();
-            await handleLogout();
-        });
-    });
 }
 
-// Main DOMContentLoaded event listener - consolidate all initialization here
-// Main DOMContentLoaded event listener - consolidate all initialization here
-// Main DOMContentLoaded event listener - REPLACE YOUR ENTIRE DOMContentLoaded (lines 417-557)
+// Main DOMContentLoaded event listener
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('DOM Content Loaded - Initializing...');
-
-    // Initialize sidebar toggle functionality
     initializeSidebar();
-
-    // Initialize dropdown functionality
     initializeDropdowns();
-
-    // Initialize logout buttons
     initializeLogoutButtons();
-
-    // Initialize mobile enhancements
     initializeMobileEnhancements();
 
-    // ===== MODAL CLOSE HANDLERS =====
-    // Modal close button (X button)
     const closeBtn = document.querySelector('.close-modal');
     if (closeBtn) {
         closeBtn.addEventListener('click', closeCreateEventModal);
-        console.log('Close button initialized');
-    } else {
-        console.warn('Close button (.close-modal) not found in HTML');
     }
 
-    // Close modal when clicking outside (on the backdrop)
     const modal = document.getElementById('createEventModal');
     if (modal) {
         modal.addEventListener('click', (e) => {
@@ -462,12 +523,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 closeCreateEventModal();
             }
         });
-        console.log('Modal backdrop click handler initialized');
-    } else {
-        console.warn('Modal (#createEventModal) not found in HTML');
     }
 
-    // Close modal with Escape key
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
             const modal = document.getElementById('createEventModal');
@@ -477,7 +534,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // ===== FORM SUBMISSION =====
     const createEventForm = document.getElementById('createEventForm');
     if (createEventForm) {
         createEventForm.addEventListener('submit', async (e) => {
@@ -492,7 +548,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const submitButton = createEventForm.querySelector('button[type="submit"]');
             const originalText = submitButton.innerHTML;
 
-            // Change text based on whether we're editing or creating
             const loadingText = currentEditEventId ?
                 '<i class="fas fa-spinner fa-spin"></i> Updating...' :
                 '<i class="fas fa-spinner fa-spin"></i> Creating...';
@@ -508,16 +563,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     teamSize: parseInt(document.getElementById('teamSize').value),
                     maxTeams: parseInt(document.getElementById('maxTeams')?.value || 10),
                     cost: parseFloat(document.getElementById('eventCost').value),
-                    description: document.getElementById('eventDescription').value
+                    description: document.getElementById('eventDescription').value,
+                    category: document.getElementById('eventCategory').value
                 };
 
                 if (currentEditEventId) {
-                    // UPDATE existing event
                     eventData.lastUpdated = firebase.firestore.FieldValue.serverTimestamp();
                     await db.collection('events').doc(currentEditEventId).update(eventData);
                     showSuccess('Event updated successfully!');
                 } else {
-                    // CREATE new event
                     eventData.createdBy = user.uid;
                     eventData.createdAt = firebase.firestore.FieldValue.serverTimestamp();
                     eventData.status = 'upcoming';
@@ -535,13 +589,12 @@ document.addEventListener('DOMContentLoaded', () => {
             } finally {
                 submitButton.innerHTML = originalText;
                 submitButton.disabled = false;
-                currentEditEventId = null; // Reset after submission
+                currentEditEventId = null;
             }
         });
     }
-
-    console.log('All initializations complete');
 });
+
 // Toast notification functions
 function showSuccess(message) {
     showToast(message, 'success');
@@ -564,11 +617,7 @@ function showToast(message, type = 'info') {
     `;
 
     document.body.appendChild(toast);
-
-    // Trigger animation
     setTimeout(() => toast.classList.add('show'), 10);
-
-    // Remove after 3 seconds
     setTimeout(() => {
         toast.classList.remove('show');
         setTimeout(() => toast.remove(), 300);
@@ -577,17 +626,14 @@ function showToast(message, type = 'info') {
 
 // MOBILE MENU FUNCTIONALITY
 function initializeMobileEnhancements() {
-    // Mobile Menu Toggle
     const menuToggle = document.querySelector('.menu-toggle');
     const sidebar = document.querySelector('.sidebar');
-    const mainContent = document.querySelector('.main-content');
 
     if (menuToggle && sidebar) {
         menuToggle.addEventListener('click', (e) => {
             e.stopPropagation();
             sidebar.classList.toggle('show');
 
-            // Add overlay for mobile
             if (sidebar.classList.contains('show')) {
                 createOverlay();
             } else {
@@ -596,7 +642,6 @@ function initializeMobileEnhancements() {
         });
     }
 
-    // Close sidebar when clicking outside on mobile
     document.addEventListener('click', (e) => {
         if (window.innerWidth <= 768) {
             if (sidebar && sidebar.classList.contains('show')) {
@@ -608,7 +653,6 @@ function initializeMobileEnhancements() {
         }
     });
 
-    // Close sidebar when clicking nav items on mobile
     const navItems = document.querySelectorAll('.nav-item');
     navItems.forEach(item => {
         item.addEventListener('click', () => {
@@ -619,7 +663,6 @@ function initializeMobileEnhancements() {
         });
     });
 
-    // Handle window resize
     let resizeTimer;
     window.addEventListener('resize', () => {
         clearTimeout(resizeTimer);
@@ -631,7 +674,6 @@ function initializeMobileEnhancements() {
         }, 250);
     });
 
-    // Create overlay for mobile menu
     function createOverlay() {
         if (!document.querySelector('.sidebar-overlay')) {
             const overlay = document.createElement('div');
@@ -656,7 +698,6 @@ function initializeMobileEnhancements() {
         }
     }
 
-    // Remove overlay
     function removeOverlay() {
         const overlay = document.querySelector('.sidebar-overlay');
         if (overlay) {
@@ -665,7 +706,6 @@ function initializeMobileEnhancements() {
         }
     }
 
-    // Add fade animations
     if (!document.querySelector('#mobile-animations')) {
         const style = document.createElement('style');
         style.id = 'mobile-animations';
@@ -681,80 +721,80 @@ function initializeMobileEnhancements() {
         `;
         document.head.appendChild(style);
     }
-
-    // Mobile-friendly modal positioning
-    const modals = document.querySelectorAll('.modal');
-    modals.forEach(modal => {
-        modal.addEventListener('click', (e) => {
-            if (e.target === modal) {
-                modal.style.display = 'none';
-            }
-        });
-    });
-
-    // Prevent body scroll when modal is open
-    const observer = new MutationObserver((mutations) => {
-        mutations.forEach((mutation) => {
-            if (mutation.target.style.display === 'flex') {
-                document.body.style.overflow = 'hidden';
-            } else if (mutation.target.style.display === 'none') {
-                document.body.style.overflow = '';
-            }
-        });
-    });
-
-    modals.forEach(modal => {
-        observer.observe(modal, {
-            attributes: true,
-            attributeFilter: ['style']
-        });
-    });
-
-    // Touch swipe to close sidebar on mobile
-    let touchStartX = 0;
-    let touchEndX = 0;
-
-    if (sidebar) {
-        sidebar.addEventListener('touchstart', (e) => {
-            touchStartX = e.changedTouches[0].screenX;
-        }, { passive: true });
-
-        sidebar.addEventListener('touchend', (e) => {
-            touchEndX = e.changedTouches[0].screenX;
-            handleSwipe();
-        }, { passive: true });
-    }
-
-    function handleSwipe() {
-        if (window.innerWidth <= 768) {
-            const swipeDistance = touchEndX - touchStartX;
-            // Swipe left to close (at least 50px)
-            if (swipeDistance < -50 && sidebar.classList.contains('show')) {
-                sidebar.classList.remove('show');
-                removeOverlay();
-            }
-        }
-    }
-
-    // Keyboard navigation improvements
-    document.addEventListener('keydown', (e) => {
-        // ESC key closes modal
-        if (e.key === 'Escape') {
-            const openModal = document.querySelector('.modal[style*="display: flex"]');
-            if (openModal) {
-                openModal.style.display = 'none';
-            }
-
-            // Close sidebar on mobile
-            if (window.innerWidth <= 768 && sidebar.classList.contains('show')) {
-                sidebar.classList.remove('show');
-                removeOverlay();
-            }
-        }
-    });
-
-    console.log('Mobile enhancements loaded successfully');
 }
+
+// Mobile-friendly modal positioning
+const modals = document.querySelectorAll('.modal');
+modals.forEach(modal => {
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            modal.style.display = 'none';
+        }
+    });
+});
+
+// Prevent body scroll when modal is open
+const observer = new MutationObserver((mutations) => {
+    mutations.forEach((mutation) => {
+        if (mutation.target.style.display === 'flex') {
+            document.body.style.overflow = 'hidden';
+        } else if (mutation.target.style.display === 'none') {
+            document.body.style.overflow = '';
+        }
+    });
+});
+
+modals.forEach(modal => {
+    observer.observe(modal, {
+        attributes: true,
+        attributeFilter: ['style']
+    });
+});
+
+// Touch swipe to close sidebar on mobile
+let touchStartX = 0;
+let touchEndX = 0;
+
+if (sidebar) {
+    sidebar.addEventListener('touchstart', (e) => {
+        touchStartX = e.changedTouches[0].screenX;
+    }, { passive: true });
+
+    sidebar.addEventListener('touchend', (e) => {
+        touchEndX = e.changedTouches[0].screenX;
+        handleSwipe();
+    }, { passive: true });
+}
+
+function handleSwipe() {
+    if (window.innerWidth <= 768) {
+        const swipeDistance = touchEndX - touchStartX;
+        // Swipe left to close (at least 50px)
+        if (swipeDistance < -50 && sidebar.classList.contains('show')) {
+            sidebar.classList.remove('show');
+            removeOverlay();
+        }
+    }
+}
+
+// Keyboard navigation improvements
+document.addEventListener('keydown', (e) => {
+    // ESC key closes modal
+    if (e.key === 'Escape') {
+        const openModal = document.querySelector('.modal[style*="display: flex"]');
+        if (openModal) {
+            openModal.style.display = 'none';
+        }
+
+        // Close sidebar on mobile
+        if (window.innerWidth <= 768 && sidebar.classList.contains('show')) {
+            sidebar.classList.remove('show');
+            removeOverlay();
+        }
+    }
+});
+
+console.log('Mobile enhancements loaded successfully');
 
 // Utility function to detect mobile device
 function isMobileDevice() {

@@ -13,10 +13,6 @@
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
-    <!-- Firebase SDK -->
-    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
 </head>
 <body>
     <div class="dashboard-container">
@@ -117,6 +113,7 @@
                         <div class="filter-group">
                             <label>Sort by:</label>
                             <select id="sort-filter">
+                                <option value="ownership">My Events First</option>
                                 <option value="date-asc">Date (Ascending)</option>
                                 <option value="date-desc">Date (Descending)</option>
                                 <option value="name-asc">Name (A-Z)</option>
@@ -147,6 +144,19 @@
                     <input type="text" id="eventName" required>
                 </div>
                 <div class="form-group">
+                    <label for="eventCategory">Event Category</label>
+                    <select id="eventCategory" required>
+                        <option value="Sports">Sports</option>
+                        <option value="Cultural">Cultural</option>
+                        <option value="Technical">Technical</option>
+                        <option value="Workshop">Workshop</option>
+                        <option value="Competition">Competition</option>
+                        <option value="Social">Social</option>
+                        <option value="Academic">Academic</option>
+                        <option value="Other">Other</option>
+                    </select>
+                </div>
+                <div class="form-group">
                     <label for="eventDate">Date & Time</label>
                     <input type="datetime-local" id="eventDate" required>
                 </div>
@@ -172,7 +182,7 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn-secondary" onclick="closeCreateEventModal()">Cancel</button>
-                    <button type="submit" class="btn-primary"onclick="location.reload()">Create Event</button>
+                    <button type="submit" class="btn-primary">Create Event</button>
                 </div>
             </form>
         </div>
@@ -183,7 +193,6 @@
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
     <script src="events.js"></script>
-    <script src="create-event.js"></script>
 
     <!-- Error/Success Message Container -->
     <div id="message-container" class="message-container"></div>

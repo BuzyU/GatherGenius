@@ -182,10 +182,20 @@ body {
 
 .settings-content-header {
   background-color: #e28e55;
+  margin-top: 0px;
   padding: 24px;
-  border-radius: 16px;
+  border-radius: 18px;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
+
+.back-btn {
+    background: none;
+    border: none;
+    color: var(--text-color);
+    cursor: pointer;
+    padding: 8px;
+}
+
 .header-left h1 {
     font-size: 1.8rem;
     color: var(--text-color);
@@ -451,22 +461,53 @@ body {
 .security-section,
 .activity-section,
 .event-details-section {
-    background: var(--surface-color);
-    border-radius: 12px;
-    padding: 20px;
-    box-shadow: var(--shadow-sm);
-    margin-bottom: 30px;
+    background: white;
+    border-radius: 16px;
+    padding: 32px;
+    margin-bottom: 32px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
-.section-header {
+.security-section h3 {
+    font-size: 1.5rem;
+    color: var(--text-color);
+    margin: 0 0 24px 0;
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    margin-bottom: 20px;
+    gap: 12px;
 }
 
-.section-header h2 {
-    font-size: 1.2rem;
+.security-section h3::before {
+    content: '\f023';
+    font-family: 'Font Awesome 6 Free';
+    font-weight: 900;
+    color: var(--primary-color);
+}
+
+.security-grid {
+    display: grid;
+    gap: 24px;
+}
+
+.security-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px;
+    border: 1px solid #e9ecef;
+    border-radius: 12px;
+    transition: all 0.3s ease;
+}
+
+.security-item:hover {
+    border-color: var(--primary-color);
+    box-shadow: 0 2px 8px rgba(255, 102, 0, 0.1);
+}
+
+.security-info h4 {
+    margin: 0 0 4px 0;
+    color: var(--text-color);
+    font-size: 1.1rem;
 }
 
 .view-all {
@@ -2432,4 +2473,232 @@ h1 {
   color: #856404;
   margin: 0;
   padding-left: 20px;
+}
+/* Add these styles to your existing style.css file */
+
+/* Category Badge */
+.category-badge {
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-right: 8px;
+    white-space: nowrap;
+}
+
+/* Owner Badge */
+.owner-badge {
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.65rem;
+    font-weight: 600;
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    color: white;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-left: 8px;
+    white-space: nowrap;
+    display: inline-block;
+}
+
+/* Event Badges Container */
+.event-badges {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+/* Update event title to handle badges better */
+.event-title {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 8px;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.event-title h3 {
+    margin: 0;
+    font-size: 1.2rem;
+    color: var(--text-color);
+    flex: 1;
+    min-width: 150px;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+/* Category specific colors */
+.category-badge[data-category="Sports"] {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.category-badge[data-category="Cultural"] {
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+}
+
+.category-badge[data-category="Technical"] {
+    background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+}
+
+.category-badge[data-category="Workshop"] {
+    background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+}
+
+.category-badge[data-category="Competition"] {
+    background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+}
+
+.category-badge[data-category="Social"] {
+    background: linear-gradient(135deg, #30cfd0 0%, #330867 100%);
+}
+
+.category-badge[data-category="Academic"] {
+    background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
+    color: #333;
+}
+
+.category-badge[data-category="Other"] {
+    background: linear-gradient(135deg, #d299c2 0%, #fef9d7 100%);
+    color: #333;
+}
+
+/* Form group for category selector */
+.form-group select {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    font-size: 0.95rem;
+    font-family: inherit;
+    transition: all 0.3s ease;
+    background: white;
+    cursor: pointer;
+}
+
+.form-group select:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(255, 102, 0, 0.1);
+}
+
+/* Mobile responsive adjustments for badges */
+@media (max-width: 768px) {
+    .category-badge {
+        font-size: 0.65rem;
+        padding: 3px 8px;
+    }
+    
+    .owner-badge {
+        font-size: 0.6rem;
+        padding: 2px 6px;
+    }
+    
+    .event-title {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .event-badges {
+        width: 100%;
+        justify-content: flex-start;
+    }
+}
+
+/* Section header styling */
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.section-header h2 {
+    font-size: 1.3rem;
+    color: var(--text-color);
+    margin: 0;
+}
+
+/* View All button styling */
+.view-all {
+    padding: 8px 16px;
+    background: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    text-decoration: none;
+    transition: all 0.3s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.view-all:hover {
+    background: var(--primary-dark);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(255, 102, 0, 0.3);
+}
+
+/* Enhanced event actions for better mobile UX */
+.event-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 15px;
+}
+
+.event-actions button {
+    flex: 1;
+    min-width: 100px;
+    justify-content: center;
+    font-size: 0.85rem;
+    padding: 8px 12px;
+}
+
+/* Show only view button for non-owner events */
+.event-card:not(.owner-event) .event-actions button:not(.btn-primary) {
+    display: none;
+}
+
+/* Highlight owner's events with subtle border */
+.event-card:has(.owner-badge) {
+    border: 2px solid rgba(255, 102, 0, 0.2);
+    background: linear-gradient(to bottom right, rgba(255, 102, 0, 0.02), transparent);
+}
+
+/* Animations */
+@keyframes slideInBadge {
+    from {
+        opacity: 0;
+        transform: translateX(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+.category-badge,
+.owner-badge {
+    animation: slideInBadge 0.3s ease-out;
+}
+
+/* Dark theme support for badges */
+[data-theme="dark"] .category-badge[data-category="Academic"],
+[data-theme="dark"] .category-badge[data-category="Other"] {
+    color: #fff;
+}
+
+[data-theme="dark"] .owner-badge {
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
 }

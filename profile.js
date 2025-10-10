@@ -21,11 +21,10 @@ const auth = firebase.auth();
 const db = firebase.firestore();
 const storage = firebase.storage();
 
-// Simple persistence setup - no aggressive offline detection
+// Simple persistence setup
 try {
     db.enablePersistence({ synchronizeTabs: true })
         .catch((err) => {
-            // Just log warnings, don't block functionality
             console.warn('Persistence not enabled:', err.code);
         });
 } catch (err) {
@@ -44,33 +43,26 @@ auth.onAuthStateChanged(async (user) => {
     }
     
     currentUser = user;
-    
-    // Show loading state
     showLoadingState();
     
     try {
-        // Initialize user profile if it doesn't exist
         await initializeUserProfile();
         
-        // Load all profile data with individual error handling
         const results = await Promise.allSettled([
             loadUserProfile(),
             loadUserStats(),
             loadUserActivity()
         ]);
         
-        // Check if any critical functions failed
         const failures = results.filter(result => result.status === 'rejected');
         if (failures.length > 0) {
             console.warn('Some profile data failed to load:', failures);
             showToast('Some data may be outdated (offline mode)', 'warning');
         }
         
-        // Hide loading state
         hideLoadingState();
     } catch (error) {
         console.error('Error loading profile data:', error);
-        
         showToast('Error loading profile data. Please refresh the page.', 'error');
         hideLoadingState();
     }
@@ -79,7 +71,6 @@ auth.onAuthStateChanged(async (user) => {
 // Load user profile data
 async function loadUserProfile() {
     try {
-        // Load from Firestore user profile collection
         const userDoc = await db.collection('users').doc(currentUser.uid).get();
         let userData = {};
         
@@ -87,7 +78,6 @@ async function loadUserProfile() {
             userData = userDoc.data();
         }
 
-        // Merge with Firebase Auth data
         const profileData = {
             displayName: userData.displayName || currentUser.displayName || '',
             email: currentUser.email || '',
@@ -99,17 +89,12 @@ async function loadUserProfile() {
             photoURL: userData.photoURL || currentUser.photoURL || generateAvatarUrl(currentUser.displayName || currentUser.email)
         };
 
-        // Store original data for cancel functionality
         originalProfileData = { ...profileData };
-
-        // Update UI
         updateProfileUI(profileData);
     } catch (error) {
         console.error('Error loading profile:', error);
         
-        // Handle offline mode gracefully
         if (error.code === 'unavailable') {
-            // Use Firebase Auth data as fallback
             const fallbackData = {
                 displayName: currentUser.displayName || '',
                 email: currentUser.email || '',
@@ -134,7 +119,6 @@ function updateProfileUI(data) {
     document.getElementById('profile-email').textContent = data.email;
     document.getElementById('profile-avatar').src = data.photoURL;
     
-    // Form fields
     document.getElementById('display-name').value = data.displayName;
     document.getElementById('email').value = data.email;
     document.getElementById('phone').value = data.phone;
@@ -147,24 +131,20 @@ function updateProfileUI(data) {
 // Load user statistics
 async function loadUserStats() {
     try {
-        // Get all events first
         const allEventsSnapshot = await db.collection('events').get();
         const allEvents = [];
         allEventsSnapshot.forEach(doc => {
             allEvents.push({ id: doc.id, ...doc.data() });
         });
 
-        // Calculate statistics
         const organizedEvents = allEvents.filter(event => event.createdBy === currentUser.uid);
         const attendedEvents = allEvents.filter(event => 
             event.participants && event.participants.some(p => p.uid === currentUser.uid)
         );
 
-        // Calculate days since account creation
         const creationTime = new Date(currentUser.metadata.creationTime);
         const daysSinceCreation = Math.floor((new Date() - creationTime) / (1000 * 60 * 60 * 24));
 
-        // Update stats with animation
         animateCounter('events-organized', organizedEvents.length);
         animateCounter('events-attended', attendedEvents.length);
         animateCounter('member-since', daysSinceCreation);
@@ -178,10 +158,8 @@ async function loadUserStats() {
     } catch (error) {
         console.error('Error loading stats:', error);
         
-        // Handle offline mode gracefully
         if (error.code === 'unavailable') {
             console.warn('Stats unavailable in offline mode');
-            // Show basic stats from account creation
             const creationTime = new Date(currentUser.metadata.creationTime);
             const daysSinceCreation = Math.floor((new Date() - creationTime) / (1000 * 60 * 60 * 24));
             
@@ -202,7 +180,6 @@ async function loadUserActivity() {
     try {
         const activities = [];
         
-        // Get recent events organized with proper error handling
         try {
             const recentEventsQuery = db.collection('events')
                 .where('createdBy', '==', currentUser.uid)
@@ -227,9 +204,8 @@ async function loadUserActivity() {
                 });
             });
         } catch (eventError) {
-            console.warn('Could not load events for activity (may not have createdAt index):', eventError);
+            console.warn('Could not load events for activity:', eventError);
             
-            // Fallback: Get events without ordering
             const allEvents = await db.collection('events')
                 .where('createdBy', '==', currentUser.uid)
                 .limit(5)
@@ -247,7 +223,6 @@ async function loadUserActivity() {
             });
         }
 
-        // Get user profile updates from Firestore
         try {
             const userDoc = await db.collection('users').doc(currentUser.uid).get();
             if (userDoc.exists) {
@@ -267,7 +242,6 @@ async function loadUserActivity() {
             console.warn('Could not load profile update activity:', profileError);
         }
 
-        // Add account creation activity
         if (currentUser.metadata && currentUser.metadata.creationTime) {
             activities.push({
                 type: 'security',
@@ -278,18 +252,13 @@ async function loadUserActivity() {
             });
         }
 
-        // Sort by time (newest first)
         activities.sort((a, b) => b.time - a.time);
-
-        // Display activities
         displayActivities(activities.slice(0, 10));
         
         return activities;
     } catch (error) {
         console.error('Error loading activity:', error);
         showToast('Error loading activity history', 'warning');
-        
-        // Display empty state
         displayActivities([]);
         return [];
     }
@@ -320,51 +289,67 @@ function displayActivities(activities) {
     `).join('');
 }
 
-// Toggle edit mode
+// Toggle edit mode - FIXED
 window.toggleEditMode = function() {
     isEditMode = !isEditMode;
-    const formInputs = document.querySelectorAll('#profile-form input, #profile-form textarea');
-    const editBtn = document.getElementById('edit-btn-text');
+    const formInputs = document.querySelectorAll('#profile-form input:not(#email), #profile-form textarea');
+    const editBtnContainer = document.querySelector('.header-right');
     const formActions = document.getElementById('form-actions');
     const avatarOverlay = document.getElementById('avatar-overlay');
 
     if (isEditMode) {
+        // Enable editing
         formInputs.forEach(input => {
-            if (input.id !== 'email') { // Email should remain disabled
-                input.disabled = false;
-            }
+            input.disabled = false;
+            input.style.backgroundColor = '#fff';
         });
-        editBtn.textContent = 'Cancel Edit';
+        
+        // Hide edit button, show save/cancel buttons
+        editBtnContainer.style.display = 'none';
         formActions.style.display = 'flex';
-        avatarOverlay.style.display = 'flex';
+        
+        // Enable avatar change
+        avatarOverlay.style.pointerEvents = 'auto';
+        avatarOverlay.style.cursor = 'pointer';
     } else {
-        formInputs.forEach(input => input.disabled = true);
-        editBtn.textContent = 'Edit Profile';
+        // Disable editing
+        formInputs.forEach(input => {
+            input.disabled = true;
+            input.style.backgroundColor = '#f8f9fa';
+        });
+        
+        // Show edit button, hide save/cancel buttons
+        editBtnContainer.style.display = 'flex';
         formActions.style.display = 'none';
-        avatarOverlay.style.display = 'none';
+        
+        // Disable avatar change
+        avatarOverlay.style.pointerEvents = 'none';
+        
         // Restore original data
         updateProfileUI(originalProfileData);
     }
 };
 
-// Cancel edit
-window.cancelEdit = function() {
-    toggleEditMode();
-};
+// Cancel edit - FIXED
 
-// Handle profile form submission
+// Handle profile form submission - FIXED
 document.getElementById('profile-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     
+    const saveButton = e.submitter || e.target.querySelector('button[type="submit"]');
+    if (saveButton) {
+        saveButton.disabled = true;
+        saveButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+    }
+    
     try {
-        const formData = new FormData(e.target);
         const updatedData = {
-            displayName: document.getElementById('display-name').value,
-            phone: document.getElementById('phone').value,
-            organization: document.getElementById('organization').value,
-            location: document.getElementById('location').value,
-            website: document.getElementById('website').value,
-            bio: document.getElementById('bio').value,
+            displayName: document.getElementById('display-name').value.trim(),
+            phone: document.getElementById('phone').value.trim(),
+            organization: document.getElementById('organization').value.trim(),
+            location: document.getElementById('location').value.trim(),
+            website: document.getElementById('website').value.trim(),
+            bio: document.getElementById('bio').value.trim(),
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         };
 
@@ -380,11 +365,21 @@ document.getElementById('profile-form').addEventListener('submit', async (e) => 
         originalProfileData = { ...originalProfileData, ...updatedData };
         
         showToast('Profile updated successfully!', 'success');
+        
+        // Exit edit mode
+        isEditMode = true;
         toggleEditMode();
-        loadUserProfile(); // Reload to show updated data
+        
+        // Reload profile data
+        await loadUserProfile();
     } catch (error) {
         console.error('Error updating profile:', error);
-        showToast('Error updating profile', 'error');
+        showToast('Error updating profile: ' + error.message, 'error');
+    } finally {
+        if (saveButton) {
+            saveButton.disabled = false;
+            saveButton.innerHTML = '<i class="fas fa-save"></i> Save Changes';
+        }
     }
 });
 
@@ -399,13 +394,12 @@ document.getElementById('avatar-input').addEventListener('change', async (e) => 
     const file = e.target.files[0];
     if (!file) return;
 
-    // Validate file
     if (!file.type.startsWith('image/')) {
         showToast('Please select an image file', 'error');
         return;
     }
 
-    if (file.size > 5 * 1024 * 1024) { // 5MB limit
+    if (file.size > 5 * 1024 * 1024) {
         showToast('Image size must be less than 5MB', 'error');
         return;
     }
@@ -413,19 +407,16 @@ document.getElementById('avatar-input').addEventListener('change', async (e) => 
     try {
         showToast('Uploading image...', 'info');
         
-        // Upload to Firebase Storage
         const storageRef = storage.ref(`avatars/${currentUser.uid}/${Date.now()}_${file.name}`);
         const snapshot = await storageRef.put(file);
         const downloadURL = await snapshot.ref.getDownloadURL();
 
-        // Update profile
         await currentUser.updateProfile({ photoURL: downloadURL });
         await db.collection('users').doc(currentUser.uid).update({
             photoURL: downloadURL,
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         });
 
-        // Update UI
         document.getElementById('profile-avatar').src = downloadURL;
         originalProfileData.photoURL = downloadURL;
         
@@ -439,10 +430,12 @@ document.getElementById('avatar-input').addEventListener('change', async (e) => 
 // Change password modal
 window.showChangePasswordModal = function() {
     document.getElementById('changePasswordModal').classList.add('show');
+    document.getElementById('changePasswordModal').style.display = 'flex';
 };
 
 window.closeChangePasswordModal = function() {
     document.getElementById('changePasswordModal').classList.remove('show');
+    document.getElementById('changePasswordModal').style.display = 'none';
     document.getElementById('change-password-form').reset();
 };
 
@@ -459,15 +452,17 @@ document.getElementById('change-password-form').addEventListener('submit', async
         return;
     }
 
+    if (newPassword.length < 6) {
+        showToast('Password must be at least 6 characters', 'error');
+        return;
+    }
+
     try {
-        // Re-authenticate user
         const credential = firebase.auth.EmailAuthProvider.credential(
             currentUser.email,
             currentPassword
         );
         await currentUser.reauthenticateWithCredential(credential);
-
-        // Update password
         await currentUser.updatePassword(newPassword);
         
         showToast('Password updated successfully!', 'success');
@@ -476,8 +471,10 @@ document.getElementById('change-password-form').addEventListener('submit', async
         console.error('Error changing password:', error);
         if (error.code === 'auth/wrong-password') {
             showToast('Current password is incorrect', 'error');
+        } else if (error.code === 'auth/weak-password') {
+            showToast('Password is too weak', 'error');
         } else {
-            showToast('Error changing password', 'error');
+            showToast('Error changing password: ' + error.message, 'error');
         }
     }
 });
@@ -486,13 +483,15 @@ document.getElementById('change-password-form').addEventListener('submit', async
 window.showSessionsModal = function() {
     loadSessions();
     document.getElementById('sessionsModal').classList.add('show');
+    document.getElementById('sessionsModal').style.display = 'flex';
 };
 
 window.closeSessionsModal = function() {
     document.getElementById('sessionsModal').classList.remove('show');
+    document.getElementById('sessionsModal').style.display = 'none';
 };
 
-// Load sessions (simulated)
+// Load sessions
 function loadSessions() {
     const sessionsList = document.getElementById('sessions-list');
     const sessions = [
@@ -521,7 +520,7 @@ function loadSessions() {
     `).join('');
 }
 
-// Terminate session (simulated)
+// Terminate session
 window.terminateSession = function() {
     showToast('Session terminated', 'success');
     loadSessions();
@@ -534,7 +533,7 @@ window.terminateAllSessions = function() {
     }
 };
 
-// 2FA toggle (simulated)
+// 2FA toggle
 window.toggle2FA = function() {
     const status = document.getElementById('2fa-status');
     const btnText = document.getElementById('2fa-btn-text');
@@ -566,41 +565,73 @@ function formatTimeAgo(date) {
 }
 
 function showToast(message, type = 'info') {
+    // Remove existing toasts
+    const existingToasts = document.querySelectorAll('.toast');
+    existingToasts.forEach(toast => toast.remove());
+    
     const toast = document.createElement('div');
-    toast.className = `toast ${type}`;
-    toast.textContent = message;
+    toast.className = `toast toast-${type}`;
+    
+    const icon = type === 'success' ? 'fa-check-circle' : 
+                 type === 'error' ? 'fa-exclamation-circle' :
+                 type === 'warning' ? 'fa-exclamation-triangle' : 'fa-info-circle';
+    
+    toast.innerHTML = `
+        <div class="toast-content">
+            <i class="fas ${icon}"></i>
+            <span>${message}</span>
+        </div>
+    `;
+    
     document.body.appendChild(toast);
     
+    setTimeout(() => toast.classList.add('show'), 100);
+    
     setTimeout(() => {
-        toast.remove();
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 300);
     }, 3000);
 }
 
 // Logout functionality
 document.getElementById('logout-btn').addEventListener('click', async () => {
-    try {
-        await auth.signOut();
-        window.location.href = 'login.html';
-    } catch (error) {
-        console.error('Error signing out:', error);
-        showToast('Error signing out', 'error');
+    if (confirm('Are you sure you want to logout?')) {
+        try {
+            await auth.signOut();
+            window.location.href = 'login.html';
+        } catch (error) {
+            console.error('Error signing out:', error);
+            showToast('Error signing out', 'error');
+        }
     }
 });
 
-// Initialize user profile collection if it doesn't exist
+// Initialize user profile
 async function initializeUserProfile() {
     try {
         const userDoc = await db.collection('users').doc(currentUser.uid).get();
         if (!userDoc.exists) {
-            await db.collection('users').doc(currentUser.uid).set({
+            const userData = {
                 displayName: currentUser.displayName || '',
                 email: currentUser.email,
                 photoURL: currentUser.photoURL || generateAvatarUrl(currentUser.displayName || currentUser.email),
+                phone: '',
+                organization: '',
+                location: '',
+                website: '',
+                bio: '',
                 createdAt: firebase.firestore.FieldValue.serverTimestamp(),
                 updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-            });
+            };
+            
+            await db.collection('users').doc(currentUser.uid).set(userData);
+            console.log('User profile initialized');
         }
     } catch (error) {
+        if (error.code === 'unavailable') {
+            console.warn('Offline mode: Using cached data or defaults');
+            return;
+        }
         console.error('Error initializing user profile:', error);
     }
 }
@@ -634,8 +665,10 @@ function animateCounter(elementId, targetValue) {
     const element = document.getElementById(elementId);
     if (!element) return;
     
+    element.classList.remove('loading-shimmer');
+    
     const startValue = 0;
-    const duration = 1000; // 1 second
+    const duration = 1000;
     const startTime = Date.now();
     
     function updateCounter() {
@@ -653,34 +686,21 @@ function animateCounter(elementId, targetValue) {
     updateCounter();
 }
 
-// Initialize user profile collection if it doesn't exist
-async function initializeUserProfile() {
-    try {
-        const userDoc = await db.collection('users').doc(currentUser.uid).get();
-        if (!userDoc.exists) {
-            const userData = {
-                displayName: currentUser.displayName || '',
-                email: currentUser.email,
-                photoURL: currentUser.photoURL || generateAvatarUrl(currentUser.displayName || currentUser.email),
-                phone: '',
-                organization: '',
-                location: '',
-                website: '',
-                bio: '',
-                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-            };
-            
-            await db.collection('users').doc(currentUser.uid).set(userData);
-            console.log('User profile initialized');
-        }
-    } catch (error) {
-        if (error.code === 'unavailable') {
-            console.warn('Offline mode: Using cached data or defaults');
-            // Don't throw error for offline mode
-            return;
-        }
-        console.error('Error initializing user profile:', error);
-        // Don't throw error to prevent blocking the UI
-    }
+// Mobile menu toggle
+const menuToggle = document.querySelector('.menu-toggle');
+const sidebar = document.querySelector('.sidebar');
+const sidebarOverlay = document.createElement('div');
+sidebarOverlay.className = 'sidebar-overlay';
+document.body.appendChild(sidebarOverlay);
+
+if (menuToggle) {
+    menuToggle.addEventListener('click', () => {
+        sidebar.classList.toggle('show');
+        sidebarOverlay.classList.toggle('show');
+    });
 }
+
+sidebarOverlay.addEventListener('click', () => {
+    sidebar.classList.remove('show');
+    sidebarOverlay.classList.remove('show');
+});

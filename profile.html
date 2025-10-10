@@ -51,14 +51,10 @@
         <main class="main-content">
             <header class="content-header">
                 <div class="header-left">
-                    <h1>My Profile</h1>
-                    <p>Manage your personal information and preferences</p>
-                </div>
-                <div class="header-right">
-                    <button class="btn-primary" onclick="toggleEditMode()">
-                        <i class="fas fa-edit"></i>
-                        <span id="edit-btn-text">Edit Profile</span>
+                    <button class="back-btn" onclick="window.location.href='dashboard.html'">
+                        <i class="fas fa-arrow-left"></i>
                     </button>
+                    <h1>My Profile</h1>
                 </div>
             </header>
 
@@ -128,9 +124,25 @@
                             <label for="bio">Bio</label>
                             <textarea id="bio" rows="4" disabled placeholder="Tell us about yourself..."></textarea>
                         </div>
+                        
+                        <!-- Edit Button (shown when NOT editing) -->
+                        <div class="header-right">
+                            <button type="button" class="btn-primary" onclick="toggleEditMode(event)">
+                                <i class="fas fa-edit"></i>
+                                <span>Edit Profile</span>
+                            </button>
+                        </div>
+                        
+                        <!-- Save/Cancel Buttons (shown when editing) -->
                         <div class="form-actions" id="form-actions" style="display: none;">
-                            <button type="button" class="btn-secondary" onclick="cancelEdit()">Cancel</button>
-                            <button type="submit" class="btn-primary">Save Changes</button>
+                            <button type="button" class="btn-secondary" onclick="cancelEdit(event)">
+                                <i class="fas fa-times"></i>
+                                Cancel
+                            </button>
+                            <button type="submit" class="btn-primary">
+                                <i class="fas fa-save"></i>
+                                Save Changes
+                            </button>
                         </div>
                     </form>
                 </div>
