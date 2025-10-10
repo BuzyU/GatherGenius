@@ -92,6 +92,8 @@ function updateUIForUserRole() {
 function displayEventDetails(event) {
     document.getElementById('event-title').textContent = event.name || 'Untitled Event';
     
+    const categoryBadge = event.category ? `<span class="category-badge">${event.category}</span>` : '';
+    document.getElementById('event-category').innerHTML = categoryBadge;
     const eventDate = new Date(event.date);
     const now = new Date();
     const status = eventDate > now ? 'upcoming' : 
@@ -357,6 +359,7 @@ async function updateEvent() {
 
     try {
         const name = document.getElementById('editEventName').value.trim();
+        const category = document.getElementById('editEventCategory').value;
         const date = document.getElementById('editEventDate').value;
         const location = document.getElementById('editEventLocation').value.trim();
         const teamSize = parseInt(document.getElementById('editTeamSize').value);
@@ -371,6 +374,7 @@ async function updateEvent() {
 
         const updatedData = {
             name,
+            category,
             date,
             location,
             teamSize,
@@ -528,7 +532,7 @@ window.exportEvent = function() {
 // Show/hide loading state
 function showLoadingState() {
     const loadingElements = [
-        'event-title', 'event-datetime', 'event-location', 
+        'event-title', 'event-category', 'event-datetime', 'event-location', 
         'event-team-size', 'event-cost', 'event-description'
     ];
     
