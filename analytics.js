@@ -1,4 +1,4 @@
-// analytics.js - Enhanced Analytics System with Real-time Data
+// Enhanced Analytics System - FIXED VERSION
 
 // Firebase config
 const firebaseConfig = {
@@ -19,63 +19,118 @@ if (!firebase.apps.length) {
 const auth = firebase.auth();
 const db = firebase.firestore();
 
-let currentUser = null;
-let allEvents = [];
-let filteredEvents = [];
-let charts = {};
-let timeFilter = 30; // Default: last 30 days
+// State Management
+const state = {
+    currentUser: null,
+    allEvents: [],
+    filteredEvents: [],
+    charts: {},
+    timeFilter: 30,
+    searchQuery: '',
+    categoryFilter: 'all',
+    eventsUnsubscribe: null,
+    isLoading: false
+};
 
 // Utility Functions
-function escapeHtml(str = '') {
-    return String(str)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
-}
+const utils = {
+    escapeHtml: (str = '') => {
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    },
 
-function showToast(message, type = 'info') {
-    const toast = document.createElement('div');
-    toast.className = `toast ${type}`;
-    toast.innerHTML = `
-        <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'}"></i>
-        <span>${escapeHtml(message)}</span>
-    `;
-    document.body.appendChild(toast);
-    requestAnimationFrame(() => toast.classList.add('show'));
-    setTimeout(() => {
-        toast.classList.remove('show');
-        setTimeout(() => toast.remove(), 300);
-    }, 3000);
-}
+    showToast: (message, type = 'info') => {
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+        toast.innerHTML = `
+            <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'}"></i>
+            <span>${utils.escapeHtml(message)}</span>
+        `;
+        document.body.appendChild(toast);
+        requestAnimationFrame(() => toast.classList.add('show'));
+        setTimeout(() => {
+            toast.classList.remove('show');
+            setTimeout(() => toast.remove(), 300);
+        }, 3000);
+    },
 
-function getDateFromFirestore(timestamp) {
-    if (!timestamp) return null;
-    if (timestamp.toDate) return timestamp.toDate();
-    if (timestamp instanceof Date) return timestamp;
-    return new Date(timestamp);
-}
+    getDateFromFirestore: (timestamp) => {
+        if (!timestamp) return null;
+        if (timestamp.toDate) return timestamp.toDate();
+        if (timestamp instanceof Date) return timestamp;
+        return new Date(timestamp);
+    },
 
-// Auth State
+    formatDate: (date, format = 'short') => {
+        if (!date) return '—';
+        const options = format === 'short'
+            ? { month: 'short', day: 'numeric', year: 'numeric' }
+            : { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' };
+        return date.toLocaleString('en-US', options);
+    },
+
+    formatCurrency: (amount) => {
+        return '₹' + Number(amount || 0).toLocaleString('en-IN');
+    },
+
+    debounce: (fn, wait = 300) => {
+        let timeout;
+        return function (...args) {
+            clearTimeout(timeout);
+            timeout = setTimeout(() => fn.apply(this, args), wait);
+        };
+    },
+
+    getEventStatus: (event) => {
+        const now = new Date();
+        const eventDate = utils.getDateFromFirestore(event.eventDate);
+
+        if (!eventDate) return 'upcoming';
+        if (event.status === 'completed') return 'completed';
+        if (eventDate > now) return 'upcoming';
+        return 'in-progress';
+    },
+
+    calculateTrend: (current, previous) => {
+        if (previous === 0) return current > 0 ? 100 : 0;
+        return Math.round(((current - previous) / previous) * 100);
+    },
+
+    sortEventsByDate: (events, descending = true) => {
+        return events.sort((a, b) => {
+            const dateA = utils.getDateFromFirestore(a.createdAt);
+            const dateB = utils.getDateFromFirestore(b.createdAt);
+            if (!dateA) return 1;
+            if (!dateB) return -1;
+            return descending ? dateB - dateA : dateA - dateB;
+        });
+    }
+};
+
+// Auth Management
 auth.onAuthStateChanged(async (user) => {
     if (!user) {
         window.location.href = 'login.html';
         return;
     }
-    currentUser = user;
+    state.currentUser = user;
     updateUserInterface(user);
     await loadAnalyticsData();
+    setupRealtimeUpdates();
 });
 
 function updateUserInterface(user) {
     const userName = document.getElementById('user-name');
     const userAvatar = document.getElementById('user-avatar');
-    
+
     if (userName) {
         userName.textContent = user.displayName || user.email.split('@')[0] || 'User';
     }
-    
+
     if (userAvatar) {
         if (user.photoURL) {
             userAvatar.src = user.photoURL;
@@ -86,62 +141,159 @@ function updateUserInterface(user) {
     }
 }
 
-// Load Analytics Data
+// Data Loading - FIXED: Removed orderBy to avoid index requirement
 async function loadAnalyticsData() {
+    if (state.isLoading) return;
+
     try {
-        // Show loading state
+        state.isLoading = true;
         showLoadingState();
-        
-        // Load events
+
+        // Simple query without orderBy to avoid index requirement
         const eventsSnapshot = await db.collection('events')
-            .where('organizerId', '==', currentUser.uid)
+            .where('createdBy', '==', state.currentUser.uid)
             .get();
-        
-        allEvents = [];
+
+
+
+        state.allEvents = [];
         eventsSnapshot.forEach(doc => {
-            allEvents.push({ id: doc.id, ...doc.data() });
+            state.allEvents.push({ id: doc.id, ...doc.data() });
         });
-        
-        // Apply time filter
-        applyTimeFilter();
-        
+
+        // Sort in JavaScript instead
+        state.allEvents = utils.sortEventsByDate(state.allEvents, true);
+
+        applyFilters();
+
     } catch (error) {
         console.error('Error loading analytics:', error);
-        showToast('Error loading analytics data', 'error');
-        hideLoadingState();
+        utils.showToast('Error loading analytics data: ' + error.message, 'error');
+        showErrorState();
+    } finally {
+        state.isLoading = false;
     }
 }
 
+// FIXED: Better loading state handling
 function showLoadingState() {
+    // Update stat cards
     document.querySelectorAll('.stat-card p').forEach(el => {
-        el.innerHTML = '<span class="loading-shimmer">Loading...</span>';
+        if (!el.classList.contains('stat-change')) {
+            el.innerHTML = '<span class="loading-shimmer">Loading</span>';
+        }
+    });
+
+    // For charts - hide canvas and show loading
+    const chartContainers = document.querySelectorAll('.chart-container');
+    chartContainers.forEach(container => {
+        const canvas = container.querySelector('canvas');
+        if (canvas) {
+            canvas.style.display = 'none';
+        }
+
+        let loadingDiv = container.querySelector('.chart-loading');
+        if (!loadingDiv) {
+            loadingDiv = document.createElement('div');
+            loadingDiv.className = 'chart-loading';
+            loadingDiv.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading chart...';
+            loadingDiv.style.cssText = 'display: flex; align-items: center; justify-content: center; min-height: 300px; color: #6c757d;';
+            container.appendChild(loadingDiv);
+        }
+        loadingDiv.style.display = 'flex';
     });
 }
 
-function hideLoadingState() {
-    // Loading state will be hidden when data is populated
+function showErrorState() {
+    const chartContainers = document.querySelectorAll('.chart-container');
+    chartContainers.forEach(container => {
+        const canvas = container.querySelector('canvas');
+        if (canvas) canvas.style.display = 'none';
+
+        const loadingDiv = container.querySelector('.chart-loading');
+        if (loadingDiv) loadingDiv.remove();
+
+        let errorDiv = container.querySelector('.chart-empty');
+        if (!errorDiv) {
+            errorDiv = document.createElement('div');
+            errorDiv.className = 'chart-empty';
+            errorDiv.innerHTML = `
+                <i class="fas fa-exclamation-triangle"></i>
+                <p>Error loading data</p>
+            `;
+            errorDiv.style.cssText = 'display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 300px; color: #6c757d; text-align: center;';
+            container.appendChild(errorDiv);
+        }
+    });
 }
 
-// Time Filter
-window.applyTimeFilter = function() {
-    const filterSelect = document.getElementById('timeFilter');
-    timeFilter = parseInt(filterSelect.value);
-    
-    const now = new Date();
-    const filterDate = new Date(now.getTime() - (timeFilter * 24 * 60 * 60 * 1000));
-    
-    if (timeFilter === 0) {
-        filteredEvents = [...allEvents];
-    } else {
-        filteredEvents = allEvents.filter(event => {
-            const eventDate = getDateFromFirestore(event.createdAt);
-            return eventDate && eventDate >= filterDate;
-        });
+// Real-time Updates - FIXED: Added sorting
+function setupRealtimeUpdates() {
+    if (!state.currentUser) return;
+
+    if (state.eventsUnsubscribe) {
+        state.eventsUnsubscribe();
     }
-    
-    updateAllAnalytics();
+
+    state.eventsUnsubscribe = db.collection('events')
+        .where('createdBy', '==', state.currentUser.uid)
+        .onSnapshot(
+            (snapshot) => {
+                const newEvents = [];
+                snapshot.forEach(doc => newEvents.push({ id: doc.id, ...doc.data() }));
+
+                // Sort by createdAt descending
+                state.allEvents = utils.sortEventsByDate(newEvents, true);
+                applyFilters();
+            },
+            (error) => {
+                console.error('Realtime listener error:', error);
+                utils.showToast('Realtime update error: ' + error.message, 'error');
+            }
+        );
+}
+
+// Filter Management
+window.applyTimeFilter = function () {
+    const filterSelect = document.getElementById('timeFilter');
+    state.timeFilter = parseInt(filterSelect.value) || 0;
+    applyFilters();
 };
 
+function applyFilters() {
+    const now = new Date();
+    const filterDate = new Date(now.getTime() - (state.timeFilter * 24 * 60 * 60 * 1000));
+
+    // Apply time filter
+    let filtered = state.timeFilter === 0
+        ? [...state.allEvents]
+        : state.allEvents.filter(event => {
+            const eventDate = utils.getDateFromFirestore(event.createdAt);
+            return eventDate && eventDate >= filterDate;
+        });
+
+    // Apply search filter
+    if (state.searchQuery) {
+        filtered = filtered.filter(event => {
+            const searchLower = state.searchQuery.toLowerCase();
+            return (event.name || '').toLowerCase().includes(searchLower) ||
+                (event.category || '').toLowerCase().includes(searchLower) ||
+                (event.location || '').toLowerCase().includes(searchLower);
+        });
+    }
+
+    // Apply category filter
+    if (state.categoryFilter && state.categoryFilter !== 'all') {
+        filtered = filtered.filter(event =>
+            (event.category || 'other').toLowerCase() === state.categoryFilter.toLowerCase()
+        );
+    }
+
+    state.filteredEvents = filtered;
+    updateAllAnalytics();
+}
+
+// Analytics Updates
 function updateAllAnalytics() {
     updateOverviewStats();
     updateCharts();
@@ -150,38 +302,85 @@ function updateAllAnalytics() {
     generateInsights();
 }
 
-// Overview Stats
+// Overview Statistics
 function updateOverviewStats() {
-    const totalEvents = filteredEvents.length;
-    const totalParticipants = filteredEvents.reduce((sum, e) => sum + (e.currentParticipants || 0), 0);
-    const avgParticipation = totalEvents > 0 ? Math.round(totalParticipants / totalEvents) : 0;
-    const totalRevenue = filteredEvents.reduce((sum, e) => sum + ((e.cost || 0) * (e.currentParticipants || 0)), 0);
-    
-    // Calculate change percentages (simplified - comparing to total vs filtered)
-    const changePercentage = allEvents.length > 0 ? 
-        Math.round(((filteredEvents.length - allEvents.length) / allEvents.length) * 100) : 0;
-    
-    document.getElementById('total-events-stat').textContent = totalEvents;
-    document.getElementById('total-participants-stat').textContent = totalParticipants;
-    document.getElementById('avg-participation-stat').textContent = avgParticipation;
-    document.getElementById('total-revenue-stat').textContent = `₹${totalRevenue.toLocaleString()}`;
-    
-    // Update change indicators
-    updateChangeIndicator('events-change', changePercentage);
-    updateChangeIndicator('participants-change', changePercentage);
-    document.getElementById('participation-change').textContent = 'per event';
-    updateChangeIndicator('revenue-change', changePercentage);
+    const totalEvents = state.filteredEvents.length;
+    const totalParticipants = state.filteredEvents.reduce((sum, e) =>
+        sum + (e.currentParticipants || 0), 0
+    );
+    const avgParticipation = totalEvents > 0
+        ? Math.round(totalParticipants / totalEvents)
+        : 0;
+    const totalRevenue = state.filteredEvents.reduce((sum, e) =>
+        sum + ((e.cost || 0) * (e.currentParticipants || 0)), 0
+    );
+
+    // Calculate previous period data for comparison
+    const previousPeriodEvents = getPreviousPeriodData();
+    const prevTotalEvents = previousPeriodEvents.length;
+    const prevTotalParticipants = previousPeriodEvents.reduce((sum, e) =>
+        sum + (e.currentParticipants || 0), 0
+    );
+    const prevTotalRevenue = previousPeriodEvents.reduce((sum, e) =>
+        sum + ((e.cost || 0) * (e.currentParticipants || 0)), 0
+    );
+
+    // Update stats
+    updateStat('total-events-stat', totalEvents);
+    updateStat('total-participants-stat', totalParticipants);
+    updateStat('avg-participation-stat', avgParticipation);
+    updateStat('total-revenue-stat', utils.formatCurrency(totalRevenue));
+
+    // Update changes
+    updateChangeIndicator('events-change',
+        utils.calculateTrend(totalEvents, prevTotalEvents));
+    updateChangeIndicator('participants-change',
+        utils.calculateTrend(totalParticipants, prevTotalParticipants));
+    updateChangeIndicator('revenue-change',
+        utils.calculateTrend(totalRevenue, prevTotalRevenue));
+}
+
+function getPreviousPeriodData() {
+    if (state.timeFilter === 0) return [];
+
+    const now = new Date();
+    const currentPeriodStart = new Date(now.getTime() - (state.timeFilter * 24 * 60 * 60 * 1000));
+    const previousPeriodStart = new Date(currentPeriodStart.getTime() - (state.timeFilter * 24 * 60 * 60 * 1000));
+
+    return state.allEvents.filter(event => {
+        const eventDate = utils.getDateFromFirestore(event.createdAt);
+        return eventDate && eventDate >= previousPeriodStart && eventDate < currentPeriodStart;
+    });
+}
+
+function updateStat(elementId, value) {
+    const element = document.getElementById(elementId);
+    if (element) {
+        element.textContent = value;
+        element.classList.remove('loading-shimmer');
+    }
 }
 
 function updateChangeIndicator(elementId, percentage) {
     const element = document.getElementById(elementId);
-    if (element && percentage !== 0) {
-        element.textContent = `${percentage > 0 ? '+' : ''}${percentage}% from last period`;
-        element.className = `stat-change ${percentage > 0 ? 'positive' : 'negative'}`;
+    if (!element) return;
+
+    let className = 'stat-change neutral';
+    let icon = '';
+
+    if (percentage > 0) {
+        className = 'stat-change positive';
+        icon = '<i class="fas fa-arrow-up"></i>';
+    } else if (percentage < 0) {
+        className = 'stat-change negative';
+        icon = '<i class="fas fa-arrow-down"></i>';
     }
+
+    element.className = className;
+    element.innerHTML = `${icon} ${Math.abs(percentage)}% from previous period`;
 }
 
-// Charts
+// Chart Updates
 function updateCharts() {
     updateEventsTimelineChart();
     updateCategoryChart();
@@ -190,27 +389,87 @@ function updateCharts() {
     updateRevenueChart();
 }
 
+// FIXED: Better container handling
+function getChartContainer(canvas) {
+    if (!canvas) return null;
+    let container = canvas.closest('.chart-container');
+    if (!container) {
+        container = canvas.parentElement;
+    }
+    return container;
+}
+
+function showEmptyChart(container, message) {
+    if (!container) return;
+
+    const canvas = container.querySelector('canvas');
+    if (canvas) canvas.style.display = 'none';
+
+    const loadingDiv = container.querySelector('.chart-loading');
+    if (loadingDiv) loadingDiv.remove();
+
+    let emptyDiv = container.querySelector('.chart-empty');
+    if (!emptyDiv) {
+        emptyDiv = document.createElement('div');
+        emptyDiv.className = 'chart-empty';
+        emptyDiv.style.cssText = 'display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 300px; color: #6c757d; text-align: center;';
+        container.appendChild(emptyDiv);
+    }
+    emptyDiv.innerHTML = `
+        <i class="fas fa-chart-line" style="font-size: 3rem; margin-bottom: 12px; opacity: 0.3;"></i>
+        <p style="margin: 0;">${message}</p>
+    `;
+}
+
+function prepareChartCanvas(canvasId) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return null;
+
+    const container = getChartContainer(canvas);
+
+    // Remove loading/empty states
+    const loadingDiv = container?.querySelector('.chart-loading');
+    const emptyDiv = container?.querySelector('.chart-empty');
+    if (loadingDiv) loadingDiv.remove();
+    if (emptyDiv) emptyDiv.remove();
+
+    // Show canvas
+    canvas.style.display = 'block';
+
+    return { canvas, container };
+}
+
 function updateEventsTimelineChart() {
-    const ctx = document.getElementById('eventsTimelineChart');
-    if (!ctx) return;
-    
+    const prep = prepareChartCanvas('eventsTimelineChart');
+    if (!prep) return;
+
+    const { canvas, container } = prep;
+
+    if (state.filteredEvents.length === 0) {
+        showEmptyChart(container, 'No events to display');
+        return;
+    }
+
     // Group events by date
     const eventsByDate = {};
-    filteredEvents.forEach(event => {
-        const date = getDateFromFirestore(event.createdAt);
+    state.filteredEvents.forEach(event => {
+        const date = utils.getDateFromFirestore(event.createdAt);
         if (date) {
             const dateKey = date.toISOString().split('T')[0];
             eventsByDate[dateKey] = (eventsByDate[dateKey] || 0) + 1;
         }
     });
-    
+
     const sortedDates = Object.keys(eventsByDate).sort();
-    const labels = sortedDates.map(d => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
+    const labels = sortedDates.map(d => utils.formatDate(new Date(d)));
     const data = sortedDates.map(d => eventsByDate[d]);
-    
-    if (charts.timeline) charts.timeline.destroy();
-    
-    charts.timeline = new Chart(ctx, {
+
+    if (state.charts.timeline) {
+        state.charts.timeline.destroy();
+    }
+
+    const ctx = canvas.getContext('2d');
+    state.charts.timeline = new Chart(ctx, {
         type: 'line',
         data: {
             labels: labels,
@@ -220,80 +479,125 @@ function updateEventsTimelineChart() {
                 borderColor: '#ff6600',
                 backgroundColor: 'rgba(255, 102, 0, 0.1)',
                 tension: 0.4,
-                fill: true
+                fill: true,
+                pointRadius: 4,
+                pointHoverRadius: 6
             }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
-                legend: { display: false }
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                    padding: 12,
+                    titleFont: { size: 14 },
+                    bodyFont: { size: 13 }
+                }
             },
             scales: {
-                y: { beginAtZero: true, ticks: { precision: 0 } }
+                y: {
+                    beginAtZero: true,
+                    ticks: { precision: 0 },
+                    grid: { color: 'rgba(0, 0, 0, 0.05)' }
+                },
+                x: {
+                    grid: { display: false }
+                }
             }
         }
     });
 }
 
 function updateCategoryChart() {
-    const ctx = document.getElementById('categoryChart');
-    if (!ctx) return;
-    
+    const prep = prepareChartCanvas('categoryChart');
+    if (!prep) return;
+
+    const { canvas, container } = prep;
+
+    if (state.filteredEvents.length === 0) {
+        showEmptyChart(container, 'No category data');
+        return;
+    }
+
     const categoryCount = {};
-    filteredEvents.forEach(event => {
+    state.filteredEvents.forEach(event => {
         const cat = event.category || 'Other';
         categoryCount[cat] = (categoryCount[cat] || 0) + 1;
     });
-    
+
     const labels = Object.keys(categoryCount);
     const data = Object.values(categoryCount);
     const colors = [
-        '#ff6600', '#17a2b8', '#28a745', '#ffc107', 
+        '#ff6600', '#17a2b8', '#28a745', '#ffc107',
         '#dc3545', '#6f42c1', '#fd7e14', '#20c997'
     ];
-    
-    if (charts.category) charts.category.destroy();
-    
-    charts.category = new Chart(ctx, {
+
+    if (state.charts.category) {
+        state.charts.category.destroy();
+    }
+
+    const ctx = canvas.getContext('2d');
+    state.charts.category = new Chart(ctx, {
         type: 'doughnut',
         data: {
             labels: labels,
             datasets: [{
                 data: data,
-                backgroundColor: colors.slice(0, labels.length)
+                backgroundColor: colors.slice(0, labels.length),
+                borderWidth: 2,
+                borderColor: '#fff'
             }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
-                legend: { position: 'bottom' }
+                legend: {
+                    position: 'bottom',
+                    labels: { padding: 15, font: { size: 12 } }
+                },
+                tooltip: {
+                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                    padding: 12
+                }
             }
         }
     });
 }
 
 function updateParticipationChart() {
-    const ctx = document.getElementById('participationChart');
-    if (!ctx) return;
-    
+    const prep = prepareChartCanvas('participationChart');
+    if (!prep) return;
+
+    const { canvas, container } = prep;
+
+    if (state.filteredEvents.length === 0) {
+        showEmptyChart(container, 'No participation data');
+        return;
+    }
+
     const participationByDate = {};
-    filteredEvents.forEach(event => {
-        const date = getDateFromFirestore(event.eventDate);
+    state.filteredEvents.forEach(event => {
+        const date = utils.getDateFromFirestore(event.eventDate);
         if (date) {
             const dateKey = date.toISOString().split('T')[0];
-            participationByDate[dateKey] = (participationByDate[dateKey] || 0) + (event.currentParticipants || 0);
+            participationByDate[dateKey] = (participationByDate[dateKey] || 0) +
+                (event.currentParticipants || 0);
         }
     });
-    
+
     const sortedDates = Object.keys(participationByDate).sort();
-    const labels = sortedDates.map(d => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
+    const labels = sortedDates.map(d => utils.formatDate(new Date(d)));
     const data = sortedDates.map(d => participationByDate[d]);
-    
-    if (charts.participation) charts.participation.destroy();
-    
-    charts.participation = new Chart(ctx, {
+
+    if (state.charts.participation) {
+        state.charts.participation.destroy();
+    }
+
+    const ctx = canvas.getContext('2d');
+    state.charts.participation = new Chart(ctx, {
         type: 'bar',
         data: {
             labels: labels,
@@ -301,87 +605,122 @@ function updateParticipationChart() {
                 label: 'Participants',
                 data: data,
                 backgroundColor: '#28a745',
-                borderRadius: 8
+                borderRadius: 8,
+                barThickness: 30
             }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
-                legend: { display: false }
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                    padding: 12
+                }
             },
             scales: {
-                y: { beginAtZero: true, ticks: { precision: 0 } }
+                y: {
+                    beginAtZero: true,
+                    ticks: { precision: 0 },
+                    grid: { color: 'rgba(0, 0, 0, 0.05)' }
+                },
+                x: {
+                    grid: { display: false }
+                }
             }
         }
     });
 }
 
 function updateStatusChart() {
-    const ctx = document.getElementById('statusChart');
-    if (!ctx) return;
-    
+    const prep = prepareChartCanvas('statusChart');
+    if (!prep) return;
+
+    const { canvas, container } = prep;
+
+    if (state.filteredEvents.length === 0) {
+        showEmptyChart(container, 'No status data');
+        return;
+    }
+
     const statusCount = { upcoming: 0, 'in-progress': 0, completed: 0 };
-    const now = new Date();
-    
-    filteredEvents.forEach(event => {
-        const eventDate = getDateFromFirestore(event.eventDate);
-        if (eventDate) {
-            if (eventDate > now) {
-                statusCount.upcoming++;
-            } else if (event.status === 'completed') {
-                statusCount.completed++;
-            } else {
-                statusCount['in-progress']++;
-            }
-        }
+
+    state.filteredEvents.forEach(event => {
+        const status = utils.getEventStatus(event);
+        statusCount[status]++;
     });
-    
-    if (charts.status) charts.status.destroy();
-    
-    charts.status = new Chart(ctx, {
+
+    if (state.charts.status) {
+        state.charts.status.destroy();
+    }
+
+    const ctx = canvas.getContext('2d');
+    state.charts.status = new Chart(ctx, {
         type: 'pie',
         data: {
             labels: ['Upcoming', 'In Progress', 'Completed'],
             datasets: [{
                 data: [statusCount.upcoming, statusCount['in-progress'], statusCount.completed],
-                backgroundColor: ['#17a2b8', '#ffc107', '#28a745']
+                backgroundColor: ['#17a2b8', '#ffc107', '#28a745'],
+                borderWidth: 2,
+                borderColor: '#fff'
             }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
-                legend: { position: 'bottom' }
+                legend: {
+                    position: 'bottom',
+                    labels: { padding: 15, font: { size: 12 } }
+                },
+                tooltip: {
+                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                    padding: 12
+                }
             }
         }
     });
 }
 
 function updateRevenueChart() {
-    const ctx = document.getElementById('revenueChart');
-    if (!ctx) return;
-    
+    const prep = prepareChartCanvas('revenueChart');
+    if (!prep) return;
+
+    const { canvas, container } = prep;
+
+    if (state.filteredEvents.length === 0) {
+        showEmptyChart(container, 'No revenue data');
+        return;
+    }
+
     const revenueByMonth = {};
-    filteredEvents.forEach(event => {
-        const date = getDateFromFirestore(event.eventDate);
+    state.filteredEvents.forEach(event => {
+        const date = utils.getDateFromFirestore(event.eventDate);
         if (date) {
             const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
             const revenue = (event.cost || 0) * (event.currentParticipants || 0);
             revenueByMonth[monthKey] = (revenueByMonth[monthKey] || 0) + revenue;
         }
     });
-    
+
     const sortedMonths = Object.keys(revenueByMonth).sort();
     const labels = sortedMonths.map(m => {
         const [year, month] = m.split('-');
-        return new Date(year, month - 1).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+        return new Date(year, month - 1).toLocaleDateString('en-US', {
+            month: 'short',
+            year: 'numeric'
+        });
     });
     const data = sortedMonths.map(m => revenueByMonth[m]);
-    
-    if (charts.revenue) charts.revenue.destroy();
-    
-    charts.revenue = new Chart(ctx, {
+
+    if (state.charts.revenue) {
+        state.charts.revenue.destroy();
+    }
+
+    const ctx = canvas.getContext('2d');
+    state.charts.revenue = new Chart(ctx, {
         type: 'line',
         data: {
             labels: labels,
@@ -391,79 +730,112 @@ function updateRevenueChart() {
                 borderColor: '#dc3545',
                 backgroundColor: 'rgba(220, 53, 69, 0.1)',
                 tension: 0.4,
-                fill: true
+                fill: true,
+                pointRadius: 4,
+                pointHoverRadius: 6
             }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
-                legend: { display: false }
-            },
-            scales: {
-                y: { 
-                    beginAtZero: true,
-                    ticks: {
-                        callback: function(value) {
-                            return '₹' + value.toLocaleString();
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                    padding: 12,
+                    callbacks: {
+                        label: (context) => {
+                            return 'Revenue: ' + utils.formatCurrency(context.parsed.y);
                         }
                     }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: (value) => utils.formatCurrency(value)
+                    },
+                    grid: { color: 'rgba(0, 0, 0, 0.05)' }
+                },
+                x: {
+                    grid: { display: false }
                 }
             }
         }
     });
 }
 
-// Top Events Table
+// Top Events Table - FIXED: Better empty state
 function updateTopEventsTable() {
     const tbody = document.getElementById('topEventsTable');
     if (!tbody) return;
-    
-    const sortedEvents = [...filteredEvents]
-        .sort((a, b) => (b.currentParticipants || 0) - (a.currentParticipants || 0))
-        .slice(0, 10);
-    
-    if (sortedEvents.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" class="loading-placeholder">No events to display</td></tr>';
+
+    if (state.filteredEvents.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="6" style="text-align: center; padding: 60px 20px; color: #6c757d;">
+                    <div style="display: flex; flex-direction: column; align-items: center;">
+                        <i class="fas fa-calendar-times" style="font-size: 3rem; margin-bottom: 16px; opacity: 0.3;"></i>
+                        <p style="margin: 0; font-size: 1.1rem;">No events to display</p>
+                    </div>
+                </td>
+            </tr>
+        `;
         return;
     }
-    
-    tbody.innerHTML = sortedEvents.map(event => {
-        const eventDate = getDateFromFirestore(event.eventDate);
+
+    const sortedEvents = [...state.filteredEvents]
+        .sort((a, b) => (b.currentParticipants || 0) - (a.currentParticipants || 0))
+        .slice(0, 10);
+
+    tbody.innerHTML = sortedEvents.map((event, index) => {
+        const eventDate = utils.getDateFromFirestore(event.eventDate);
         const revenue = (event.cost || 0) * (event.currentParticipants || 0);
-        const status = getEventStatus(event);
-        
+        const status = utils.getEventStatus(event);
+
         return `
             <tr>
-                <td><strong>${escapeHtml(event.name)}</strong></td>
-                <td><span class="category-badge" data-category="${escapeHtml(event.category || '')}">${escapeHtml(event.category || 'Other')}</span></td>
+                <td>
+                    <strong>${utils.escapeHtml(event.name)}</strong>
+                </td>
+                <td>
+                    <span class="category-badge" data-category="${utils.escapeHtml(event.category || 'Other')}">
+                        ${utils.escapeHtml(event.category || 'Other')}
+                    </span>
+                </td>
                 <td>${event.currentParticipants || 0}</td>
-                <td>₹${revenue.toLocaleString()}</td>
-                <td>${eventDate ? eventDate.toLocaleDateString() : '—'}</td>
-                <td><span class="event-status ${status}">${status.replace('-', ' ')}</span></td>
+                <td>${utils.formatCurrency(revenue)}</td>
+                <td>${utils.formatDate(eventDate)}</td>
+                <td>
+                    <span class="event-status ${status}">
+                        ${status.replace('-', ' ')}
+                    </span>
+                </td>
             </tr>
         `;
     }).join('');
-}
-
-function getEventStatus(event) {
-    const now = new Date();
-    const eventDate = getDateFromFirestore(event.eventDate);
-    
-    if (!eventDate) return 'upcoming';
-    if (eventDate > now) return 'upcoming';
-    if (event.status === 'completed') return 'completed';
-    return 'in-progress';
 }
 
 // Category Performance
 function updateCategoryPerformance() {
     const container = document.getElementById('categoryPerformance');
     if (!container) return;
-    
+
+    if (state.filteredEvents.length === 0) {
+        container.innerHTML = `
+            <div style="grid-column: 1 / -1; text-align: center; padding: 60px 20px; color: #6c757d;">
+                <i class="fas fa-layer-group" style="font-size: 4rem; margin-bottom: 16px; opacity: 0.3;"></i>
+                <h3 style="margin: 0 0 8px 0; color: #495057;">No Category Data</h3>
+                <p style="margin: 0; font-size: 0.9rem;">Create events to see category performance</p>
+            </div>
+        `;
+        return;
+    }
+
     const categoryStats = {};
-    
-    filteredEvents.forEach(event => {
+
+    state.filteredEvents.forEach(event => {
         const cat = event.category || 'Other';
         if (!categoryStats[cat]) {
             categoryStats[cat] = {
@@ -476,40 +848,56 @@ function updateCategoryPerformance() {
         categoryStats[cat].participants += event.currentParticipants || 0;
         categoryStats[cat].revenue += (event.cost || 0) * (event.currentParticipants || 0);
     });
-    
+
     container.innerHTML = Object.entries(categoryStats)
         .sort(([, a], [, b]) => b.revenue - a.revenue)
         .map(([category, stats]) => `
             <div class="category-performance-card">
-                <span class="category-badge" data-category="${escapeHtml(category)}">${escapeHtml(category)}</span>
+                <span class="category-badge" data-category="${utils.escapeHtml(category)}">
+                    ${utils.escapeHtml(category)}
+                </span>
                 <div class="performance-stats">
                     <div class="performance-stat">
                         <i class="fas fa-calendar"></i>
                         <span>${stats.count} events</span>
+                        <strong>${stats.count}</strong>
                     </div>
                     <div class="performance-stat">
                         <i class="fas fa-users"></i>
-                        <span>${stats.participants} participants</span>
+                        <span>Participants</span>
+                        <strong>${stats.participants}</strong>
                     </div>
                     <div class="performance-stat">
                         <i class="fas fa-rupee-sign"></i>
-                        <span>₹${stats.revenue.toLocaleString()}</span>
+                        <span>Revenue</span>
+                        <strong>${utils.formatCurrency(stats.revenue)}</strong>
                     </div>
                 </div>
             </div>
         `).join('');
 }
 
-// Insights
+// Insights Generation
 function generateInsights() {
     const container = document.getElementById('insightsContainer');
     if (!container) return;
-    
+
+    if (state.filteredEvents.length === 0) {
+        container.innerHTML = `
+            <div style="grid-column: 1 / -1; text-align: center; padding: 60px 20px; color: #6c757d;">
+                <i class="fas fa-lightbulb" style="font-size: 4rem; margin-bottom: 16px; opacity: 0.3;"></i>
+                <h3 style="margin: 0 0 8px 0; color: #495057;">No Insights Available</h3>
+                <p style="margin: 0; font-size: 0.9rem;">Create events to generate insights</p>
+            </div>
+        `;
+        return;
+    }
+
     const insights = [];
-    
+
     // Most popular category
     const categoryCount = {};
-    filteredEvents.forEach(event => {
+    state.filteredEvents.forEach(event => {
         const cat = event.category || 'Other';
         categoryCount[cat] = (categoryCount[cat] || 0) + 1;
     });
@@ -519,46 +907,80 @@ function generateInsights() {
             icon: 'trophy',
             color: '#ffc107',
             title: 'Top Category',
-            text: `${topCategory[0]} is your most popular category with ${topCategory[1]} events.`
+            text: `${topCategory[0]} is your most popular category with ${topCategory[1]} events (${Math.round((topCategory[1] / state.filteredEvents.length) * 100)}% of total).`
         });
     }
-    
-    // Average participation rate
-    const avgParticipation = filteredEvents.length > 0 ?
-        Math.round(filteredEvents.reduce((sum, e) => sum + (e.currentParticipants || 0), 0) / filteredEvents.length) : 0;
+
+    // Average participation
+    const avgParticipation = Math.round(
+        state.filteredEvents.reduce((sum, e) => sum + (e.currentParticipants || 0), 0) /
+        state.filteredEvents.length
+    );
+    const benchmark = 50;
+    const performanceText = avgParticipation >= benchmark
+        ? `above the benchmark of ${benchmark}`
+        : `below the benchmark of ${benchmark}`;
     insights.push({
         icon: 'chart-line',
-        color: '#17a2b8',
-        title: 'Average Participation',
-        text: `Your events average ${avgParticipation} participants each.`
+        color: avgParticipation >= benchmark ? '#28a745' : '#17a2b8',
+        title: 'Participation Rate',
+        text: `Your events average ${avgParticipation} participants each, ${performanceText}.`
     });
-    
+
     // Revenue insight
-    const totalRevenue = filteredEvents.reduce((sum, e) => sum + ((e.cost || 0) * (e.currentParticipants || 0)), 0);
+    const totalRevenue = state.filteredEvents.reduce((sum, e) =>
+        sum + ((e.cost || 0) * (e.currentParticipants || 0)), 0
+    );
     if (totalRevenue > 0) {
+        const avgRevenuePerEvent = Math.round(totalRevenue / state.filteredEvents.length);
         insights.push({
             icon: 'money-bill-wave',
             color: '#28a745',
-            title: 'Total Revenue',
-            text: `You've generated ₹${totalRevenue.toLocaleString()} from your events.`
+            title: 'Revenue Performance',
+            text: `Generated ${utils.formatCurrency(totalRevenue)} total with an average of ${utils.formatCurrency(avgRevenuePerEvent)} per event.`
         });
     }
-    
+
+    // Best performing event
+    const bestEvent = [...state.filteredEvents]
+        .sort((a, b) => (b.currentParticipants || 0) - (a.currentParticipants || 0))[0];
+    if (bestEvent) {
+        insights.push({
+            icon: 'star',
+            color: '#ff6600',
+            title: 'Top Performer',
+            text: `"${bestEvent.name}" is your best event with ${bestEvent.currentParticipants || 0} participants.`
+        });
+    }
+
     // Event frequency
-    if (filteredEvents.length > 0) {
-        const daysWithEvents = new Set(filteredEvents.map(e => {
-            const date = getDateFromFirestore(e.createdAt);
+    if (state.filteredEvents.length > 0) {
+        const daysWithEvents = new Set(state.filteredEvents.map(e => {
+            const date = utils.getDateFromFirestore(e.createdAt);
             return date ? date.toISOString().split('T')[0] : null;
         }).filter(Boolean)).size;
-        
+
+        const avgEventsPerDay = (state.filteredEvents.length / daysWithEvents).toFixed(1);
         insights.push({
             icon: 'calendar-check',
             color: '#dc3545',
             title: 'Event Frequency',
-            text: `You created events on ${daysWithEvents} different days in this period.`
+            text: `Created events on ${daysWithEvents} different days, averaging ${avgEventsPerDay} events per active day.`
         });
     }
-    
+
+    // Completion rate
+    const completedEvents = state.filteredEvents.filter(e =>
+        utils.getEventStatus(e) === 'completed'
+    ).length;
+    const completionRate = Math.round((completedEvents / state.filteredEvents.length) * 100);
+    insights.push({
+        icon: 'check-circle',
+        color: '#6f42c1',
+        title: 'Completion Rate',
+        text: `${completionRate}% of your events have been completed (${completedEvents} out of ${state.filteredEvents.length}).`
+    });
+
     container.innerHTML = insights.map(insight => `
         <div class="insight-card">
             <div class="insight-icon" style="background: ${insight.color}20; color: ${insight.color}">
@@ -572,26 +994,48 @@ function generateInsights() {
     `).join('');
 }
 
-// Export Report
-window.exportReport = function() {
+// Export Functions
+window.exportReport = function () {
+    if (state.filteredEvents.length === 0) {
+        utils.showToast('No data to export', 'error');
+        return;
+    }
+
     const reportData = {
         generatedAt: new Date().toISOString(),
-        timeFilter: timeFilter,
+        timeFilter: state.timeFilter === 0 ? 'All time' : `Last ${state.timeFilter} days`,
+        searchQuery: state.searchQuery || 'None',
+        categoryFilter: state.categoryFilter || 'All',
         summary: {
-            totalEvents: filteredEvents.length,
-            totalParticipants: filteredEvents.reduce((sum, e) => sum + (e.currentParticipants || 0), 0),
-            totalRevenue: filteredEvents.reduce((sum, e) => sum + ((e.cost || 0) * (e.currentParticipants || 0)), 0)
+            totalEvents: state.filteredEvents.length,
+            totalParticipants: state.filteredEvents.reduce((sum, e) =>
+                sum + (e.currentParticipants || 0), 0
+            ),
+            totalRevenue: state.filteredEvents.reduce((sum, e) =>
+                sum + ((e.cost || 0) * (e.currentParticipants || 0)), 0
+            ),
+            avgParticipation: state.filteredEvents.length > 0
+                ? Math.round(state.filteredEvents.reduce((sum, e) =>
+                    sum + (e.currentParticipants || 0), 0) / state.filteredEvents.length)
+                : 0
         },
-        events: filteredEvents.map(e => ({
+        events: state.filteredEvents.map(e => ({
             name: e.name,
             category: e.category,
+            location: e.location,
             participants: e.currentParticipants,
+            maxParticipants: e.maxParticipants,
             cost: e.cost,
-            eventDate: e.eventDate
+            revenue: (e.cost || 0) * (e.currentParticipants || 0),
+            eventDate: utils.getDateFromFirestore(e.eventDate)?.toISOString(),
+            createdAt: utils.getDateFromFirestore(e.createdAt)?.toISOString(),
+            status: utils.getEventStatus(e)
         }))
     };
-    
-    const blob = new Blob([JSON.stringify(reportData, null, 2)], { type: 'application/json' });
+
+    const blob = new Blob([JSON.stringify(reportData, null, 2)], {
+        type: 'application/json'
+    });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -600,474 +1044,33 @@ window.exportReport = function() {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    
-    showToast('Report exported successfully!', 'success');
+
+    utils.showToast('Report exported successfully!', 'success');
 };
 
-// Initialize
-document.addEventListener('DOMContentLoaded', () => {
-    // Initialize dropdowns and sidebar
-    initializeDropdowns();
-    initializeSidebar();
-    initializeLogoutButtons();
-});
-
-function initializeDropdowns() {
-    const userMenuBtn = document.querySelector('.user-menu-btn');
-    const userDropdown = document.querySelector('.user-dropdown');
-    
-    if (userMenuBtn && userDropdown) {
-        userMenuBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            userDropdown.classList.toggle('show');
-        });
-        
-        document.addEventListener('click', (e) => {
-            if (!userMenuBtn.contains(e.target) && !userDropdown.contains(e.target)) {
-                userDropdown.classList.remove('show');
-            }
-        });
-    }
-}
-
-function initializeSidebar() {
-    const sidebar = document.querySelector('.sidebar');
-    const mobileMenuToggle = document.getElementById('mobile-menu-toggle');
-    const menuToggle = document.querySelector('.menu-toggle');
-    
-    if (!sidebar) return;
-    
-    let overlay = document.querySelector('.sidebar-overlay');
-    if (!overlay) {
-        overlay = document.createElement('div');
-        overlay.className = 'sidebar-overlay';
-        document.body.appendChild(overlay);
-    }
-    
-    function toggleSidebar() {
-        sidebar.classList.toggle('active');
-        if (sidebar.classList.contains('active')) {
-            overlay.style.display = 'block';
-            setTimeout(() => overlay.style.opacity = '1', 10);
-        } else {
-            overlay.style.opacity = '0';
-            setTimeout(() => overlay.style.display = 'none', 300);
-        }
-    }
-    
-    mobileMenuToggle?.addEventListener('click', toggleSidebar);
-    menuToggle?.addEventListener('click', toggleSidebar);
-    overlay.addEventListener('click', toggleSidebar);
-}
-
-function initializeLogoutButtons() {
-    const logoutBtn = document.getElementById('logout-btn');
-    const logoutLink = document.getElementById('logout-link');
-    
-    const handleLogout = async () => {
-        try {
-            await auth.signOut();
-            window.location.href = 'login.html';
-        } catch (error) {
-            console.error('Error signing out:', error);
-            showToast('Error signing out', 'error');
-        }
-    };
-    
-    logoutBtn?.addEventListener('click', handleLogout);
-    logoutLink?.addEventListener('click', (e) => {
-        e.preventDefault();
-        handleLogout();
-    });
-}
-
-// Inject additional CSS for analytics-specific components
-function injectAnalyticsStyles() {
-    const styleId = 'analytics-custom-styles';
-    if (document.getElementById(styleId)) return;
-    
-    const style = document.createElement('style');
-    style.id = styleId;
-    style.textContent = `
-        .analytics-content { padding: 24px; }
-        .charts-row { 
-            display: grid; 
-            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); 
-            gap: 24px; 
-            margin-bottom: 24px; 
-        }
-        .chart-container { 
-            background: white; 
-            border-radius: 16px; 
-            padding: 24px; 
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1); 
-            min-height: 350px; 
-        }
-        .chart-container.full-width { grid-column: 1 / -1; }
-        .chart-header { 
-            display: flex; 
-            align-items: center; 
-            gap: 8px; 
-            margin-bottom: 20px; 
-            padding-bottom: 12px; 
-            border-bottom: 2px solid #f0f0f0; 
-        }
-        .chart-header h3 { font-size: 1.1rem; color: #333; margin: 0; }
-        .chart-header i { color: #ff6600; }
-        canvas { max-height: 280px !important; }
-        .analytics-section { 
-            background: white; 
-            border-radius: 16px; 
-            padding: 24px; 
-            margin-bottom: 24px; 
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1); 
-        }
-        .table-container { overflow-x: auto; }
-        .analytics-table { width: 100%; border-collapse: collapse; }
-        .analytics-table thead { background: #f8f9fa; }
-        .analytics-table th, .analytics-table td { 
-            padding: 12px; 
-            text-align: left; 
-            border-bottom: 1px solid #e9ecef; 
-        }
-        .analytics-table th { font-weight: 600; color: #333; font-size: 0.9rem; }
-        .analytics-table tbody tr:hover { background: #f8f9fa; }
-        .category-performance-grid { 
-            display: grid; 
-            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); 
-            gap: 20px; 
-        }
-        .category-performance-card { 
-            background: white; 
-            border: 1px solid #e9ecef;
-            border-radius: 12px; 
-            padding: 20px; 
-            transition: all 0.3s ease; 
-        }
-        .category-performance-card:hover { 
-            transform: translateY(-4px); 
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15); 
-        }
-        .performance-stats { 
-            display: flex; 
-            flex-direction: column; 
-            gap: 12px; 
-            margin-top: 16px; 
-        }
-        .performance-stat { 
-            display: flex; 
-            align-items: center; 
-            gap: 8px; 
-            color: #666; 
-            font-size: 0.9rem; 
-        }
-        .performance-stat i { color: #ff6600; width: 20px; }
-        .insights-container { 
-            display: grid; 
-            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); 
-            gap: 20px; 
-        }
-        .insight-card { 
-            background: white; 
-            border: 1px solid #e9ecef;
-            border-radius: 12px; 
-            padding: 20px; 
-            display: flex; 
-            gap: 16px; 
-            transition: transform 0.3s ease; 
-        }
-        .insight-card:hover { transform: translateY(-2px); }
-        .insight-icon { 
-            width: 50px; 
-            height: 50px; 
-            border-radius: 12px; 
-            display: flex; 
-            align-items: center; 
-            justify-content: center; 
-            font-size: 1.5rem; 
-            flex-shrink: 0; 
-        }
-        .insight-content h4 { margin: 0 0 8px 0; color: #333; font-size: 1rem; }
-        .insight-content p { margin: 0; color: #666; font-size: 0.9rem; line-height: 1.5; }
-        @media (max-width: 768px) {
-            .charts-row { grid-template-columns: 1fr; }
-            .chart-container { min-height: 300px; }
-            .analytics-content { padding: 16px; }
-        }
-    `;
-    document.head.appendChild(style);
-}
-
-// Call on load
-injectAnalyticsStyles();
-
-// Add CSS styles for analytics components
-const analyticsStyles = `
-    .analytics-stats .stat-change {
-        display: inline-block;
-        font-size: 0.8rem;
-        margin-top: 4px;
-    }
-    
-    .analytics-stats .stat-change.positive {
-        color: #28a745;
-    }
-    
-    .analytics-stats .stat-change.negative {
-        color: #dc3545;
-    }
-    
-    .charts-row {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-        gap: 24px;
-        margin-bottom: 24px;
-    }
-    
-    .chart-container {
-        background: white;
-        border-radius: 16px;
-        padding: 24px;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        min-height: 350px;
-    }
-    
-    .chart-container.full-width {
-        grid-column: 1 / -1;
-    }
-    
-    .chart-header {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        margin-bottom: 20px;
-        padding-bottom: 12px;
-        border-bottom: 2px solid #f0f0f0;
-    }
-    
-    .chart-header h3 {
-        font-size: 1.1rem;
-        color: #333;
-        margin: 0;
-    }
-    
-    .chart-header i {
-        color: #ff6600;
-    }
-    
-    canvas {
-        max-height: 280px;
-    }
-    
-    .analytics-table {
-        width: 100%;
-        border-collapse: collapse;
-    }
-    
-    .analytics-table thead {
-        background: #f8f9fa;
-    }
-    
-    .analytics-table th,
-    .analytics-table td {
-        padding: 12px;
-        text-align: left;
-        border-bottom: 1px solid #e9ecef;
-    }
-    
-    .analytics-table th {
-        font-weight: 600;
-        color: #333;
-        font-size: 0.9rem;
-    }
-    
-    .analytics-table tbody tr:hover {
-        background: #f8f9fa;
-    }
-    
-    .category-performance-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-        gap: 20px;
-    }
-    
-    .category-performance-card {
-        background: white;
-        border-radius: 12px;
-        padding: 20px;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-        transition: transform 0.3s ease, box-shadow 0.3s ease;
-    }
-    
-    .category-performance-card:hover {
-        transform: translateY(-4px);
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    }
-    
-    .performance-stats {
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
-        margin-top: 16px;
-    }
-    
-    .performance-stat {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        color: #666;
-        font-size: 0.9rem;
-    }
-    
-    .performance-stat i {
-        color: #ff6600;
-        width: 20px;
-    }
-    
-    .insights-container {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-        gap: 20px;
-    }
-    
-    .insight-card {
-        background: white;
-        border-radius: 12px;
-        padding: 20px;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-        display: flex;
-        gap: 16px;
-        transition: transform 0.3s ease;
-    }
-    
-    // --- (Place this after your existing code where analyticsStyles was being built) ---
-
-    .insight-card:hover {
-        transform: translateY(-4px);
-        box-shadow: 0 6px 18px rgba(0,0,0,0.12);
-    }
-`;
-
-// Append analyticsStyles to head if not already present
-if (!document.getElementById('analytics-styles')) {
-    const s = document.createElement('style');
-    s.id = 'analytics-styles';
-    s.textContent = analyticsStyles;
-    document.head.appendChild(s);
-}
-
-// --- Real-time updates (listen to events collection) ---
-let eventsUnsubscribe = null;
-
-async function setupRealtimeUpdates() {
-    if (!currentUser) return;
-    // unsubscribe previous listener if any
-    if (eventsUnsubscribe) eventsUnsubscribe();
-
-    eventsUnsubscribe = db.collection('events')
-        .where('organizerId', '==', currentUser.uid)
-        .onSnapshot(snapshot => {
-            // Keep allEvents in sync with Firestore
-            try {
-                const newEvents = [];
-                snapshot.forEach(doc => newEvents.push({ id: doc.id, ...doc.data() }));
-                allEvents = newEvents;
-                applyTimeFilter(); // this will call updateAllAnalytics()
-                showToast('Analytics data updated (live)', 'success');
-            } catch (err) {
-                console.error('Realtime snapshot error:', err);
-                showToast('Realtime update error', 'error');
-            }
-        }, err => {
-            console.error('Realtime listener failed:', err);
-            showToast('Realtime listener failed', 'error');
-        });
-}
-
-// --- Search & Category filter ---
-const searchState = {
-    query: '',
-    category: 'all'
-};
-
-function initializeFilters() {
-    const searchInput = document.getElementById('analytics-search');
-    const categorySelect = document.getElementById('analytics-category-filter');
-    const timeSelect = document.getElementById('timeFilter');
-
-    if (searchInput) {
-        searchInput.addEventListener('input', debounce((e) => {
-            searchState.query = e.target.value.trim().toLowerCase();
-            applyTimeFilter(); // reapply filters and update UI
-        }, 300));
-    }
-
-    if (categorySelect) {
-        categorySelect.addEventListener('change', (e) => {
-            searchState.category = e.target.value;
-            applyTimeFilter();
-        });
-    }
-
-    // keep time filter binding if not already bound
-    if (timeSelect && !timeSelect._boundToAnalytics) {
-        timeSelect.addEventListener('change', () => window.applyTimeFilter());
-        timeSelect._boundToAnalytics = true;
-    }
-}
-
-// modify applyTimeFilter to also consider search & category
-window.applyTimeFilter = function() {
-    const filterSelect = document.getElementById('timeFilter');
-    timeFilter = parseInt(filterSelect.value);
-
-    const now = new Date();
-    const filterDate = new Date(now.getTime() - (timeFilter * 24 * 60 * 60 * 1000));
-
-    let baseFiltered;
-    if (timeFilter === 0) {
-        baseFiltered = [...allEvents];
-    } else {
-        baseFiltered = allEvents.filter(event => {
-            const eventDate = getDateFromFirestore(event.createdAt);
-            return eventDate && eventDate >= filterDate;
-        });
-    }
-
-    // apply search & category filters
-    filteredEvents = baseFiltered.filter(event => {
-        const name = (event.name || '').toString().toLowerCase();
-        const category = (event.category || 'other').toString().toLowerCase();
-
-        const matchesQuery = !searchState.query || name.includes(searchState.query) || category.includes(searchState.query);
-        const matchesCategory = !searchState.category || searchState.category === 'all' || category === searchState.category.toLowerCase();
-        return matchesQuery && matchesCategory;
-    });
-
-    updateAllAnalytics();
-};
-
-// --- Export CSV ---
-window.exportCSV = function() {
-    if (!filteredEvents || filteredEvents.length === 0) {
-        showToast('No data to export', 'error');
+window.exportCSV = function () {
+    if (!state.filteredEvents || state.filteredEvents.length === 0) {
+        utils.showToast('No data to export', 'error');
         return;
     }
 
-    const headers = ['Name', 'Category', 'Participants', 'Cost', 'Revenue', 'Event Date', 'Created At', 'Status'];
-    const rows = filteredEvents.map(e => {
-        const eventDate = getDateFromFirestore(e.eventDate);
-        const createdAt = getDateFromFirestore(e.createdAt);
+    const headers = ['Name', 'Category', 'Location', 'Participants', 'Max Participants', 'Cost',
+        'Revenue', 'Event Date', 'Created At', 'Status'];
+    const rows = state.filteredEvents.map(e => {
+        const eventDate = utils.getDateFromFirestore(e.eventDate);
+        const createdAt = utils.getDateFromFirestore(e.createdAt);
         const revenue = (e.cost || 0) * (e.currentParticipants || 0);
         return [
             `"${(e.name || '').replace(/"/g, '""')}"`,
             `"${(e.category || '').replace(/"/g, '""')}"`,
+            `"${(e.location || '').replace(/"/g, '""')}"`,
             e.currentParticipants || 0,
+            e.maxParticipants || 0,
             e.cost || 0,
             revenue,
-            eventDate ? formatDate(eventDate) : '',
-            createdAt ? formatDate(createdAt) : '',
-            getEventStatus(e)
+            eventDate ? utils.formatDate(eventDate, 'long') : '',
+            createdAt ? utils.formatDate(createdAt, 'long') : '',
+            utils.getEventStatus(e)
         ].join(',');
     });
 
@@ -1081,122 +1084,131 @@ window.exportCSV = function() {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    showToast('CSV exported', 'success');
+
+    utils.showToast('CSV exported successfully!', 'success');
 };
 
-// --- Utility helpers ---
-function debounce(fn, wait = 200) {
-    let t;
-    return function(...args) {
-        clearTimeout(t);
-        t = setTimeout(() => fn.apply(this, args), wait);
-    };
-}
-
-function formatDate(d) {
-    if (!d) return '';
-    // e.g., 10 Oct 2025 14:32
-    return d.toLocaleString('en-GB', {
-        day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
-    });
-}
-
-function formatCurrency(amount) {
-    return '₹' + Number(amount || 0).toLocaleString();
-}
-
-// Replace inline rupee formatting in overview stats if needed
-function updateOverviewStats() {
-    const totalEvents = filteredEvents.length;
-    const totalParticipants = filteredEvents.reduce((sum, e) => sum + (e.currentParticipants || 0), 0);
-    const avgParticipation = totalEvents > 0 ? Math.round(totalParticipants / totalEvents) : 0;
-    const totalRevenue = filteredEvents.reduce((sum, e) => sum + ((e.cost || 0) * (e.currentParticipants || 0)), 0);
-
-    const changePercentage = allEvents.length > 0 ?
-        Math.round(((filteredEvents.length - allEvents.length) / allEvents.length) * 100) : 0;
-
-    const te = document.getElementById('total-events-stat');
-    const tp = document.getElementById('total-participants-stat');
-    const ap = document.getElementById('avg-participation-stat');
-    const tr = document.getElementById('total-revenue-stat');
-
-    if (te) te.textContent = totalEvents;
-    if (tp) tp.textContent = totalParticipants;
-    if (ap) ap.textContent = avgParticipation;
-    if (tr) tr.textContent = formatCurrency(totalRevenue);
-
-    updateChangeIndicator('events-change', changePercentage);
-    updateChangeIndicator('participants-change', changePercentage);
-    const participationLabel = document.getElementById('participation-change');
-    if (participationLabel) participationLabel.textContent = 'per event';
-    updateChangeIndicator('revenue-change', changePercentage);
-}
-
-// Resize handling for charts
-const handleResize = debounce(() => {
-    try {
-        Object.values(charts).forEach(c => {
-            if (c && typeof c.resize === 'function') c.resize();
-        });
-    } catch (err) {
-        console.warn('Chart resize error:', err);
+// Refresh Data
+window.refreshData = function () {
+    const btn = document.querySelector('.refresh-btn');
+    if (btn) {
+        btn.classList.add('refreshing');
+        setTimeout(() => btn.classList.remove('refreshing'), 1000);
     }
-}, 250);
+    loadAnalyticsData();
+};
 
-window.addEventListener('resize', handleResize);
-
-// --- Accessibility helpers: ensure buttons have ARIA roles where needed ---
-function enhanceA11y() {
-    document.querySelectorAll('button, [role="button"]').forEach(btn => {
-        if (!btn.hasAttribute('tabindex')) btn.setAttribute('tabindex', '0');
-    });
-}
-
-// --- Initialize on DOMContentLoaded (extend previous handler) ---
+// Initialize
 document.addEventListener('DOMContentLoaded', () => {
-    // existing initializers (from earlier in file)
-    initializeDropdowns();
-    initializeSidebar();
-    initializeLogoutButtons();
-    injectAnalyticsStyles();
-
-    // new initializers
+    initializeUI();
     initializeFilters();
-    enhanceA11y();
-
-    // wire export buttons if present
-    const exportJsonBtn = document.getElementById('export-json-btn');
-    const exportCsvBtn = document.getElementById('export-csv-btn');
-    exportJsonBtn?.addEventListener('click', window.exportReport);
-    exportCsvBtn?.addEventListener('click', window.exportCSV);
-
-    // time filter default binding
-    const tf = document.getElementById('timeFilter');
-    if (tf) {
-        tf.addEventListener('change', () => window.applyTimeFilter());
-    }
-
-    // if user is already signed in (auth state may have fired earlier), initialize realtime
-    if (currentUser) {
-        setupRealtimeUpdates();
-    } else {
-        // Auth state change handler (in earlier code) will call loadAnalyticsData() and we then set realtime there
-    }
 });
 
-// Make sure realtime is started when auth state resolves
-auth.onAuthStateChanged(async (user) => {
-    if (!user) {
-        // handled earlier
-        return;
-    }
-    // start listening realtime after initial load
-    setupRealtimeUpdates();
-});
+function initializeUI() {
+    // Dropdown
+    const userMenuBtn = document.querySelector('.user-menu-btn');
+    const userDropdown = document.querySelector('.user-dropdown');
 
-// Clean up before unload
+    if (userMenuBtn && userDropdown) {
+        userMenuBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            userDropdown.classList.toggle('show');
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!userMenuBtn.contains(e.target) && !userDropdown.contains(e.target)) {
+                userDropdown.classList.remove('show');
+            }
+        });
+    }
+
+    // Sidebar
+    const sidebar = document.querySelector('.sidebar');
+    const mobileMenuToggle = document.getElementById('mobile-menu-toggle');
+    const menuToggle = document.querySelector('.menu-toggle');
+
+    if (sidebar) {
+        let overlay = document.querySelector('.sidebar-overlay');
+        if (!overlay) {
+            overlay = document.createElement('div');
+            overlay.className = 'sidebar-overlay';
+            document.body.appendChild(overlay);
+        }
+
+        const toggleSidebar = () => {
+            sidebar.classList.toggle('active');
+            overlay.classList.toggle('show');
+        };
+
+        mobileMenuToggle?.addEventListener('click', toggleSidebar);
+        menuToggle?.addEventListener('click', toggleSidebar);
+        overlay.addEventListener('click', toggleSidebar);
+    }
+
+    // Logout
+    const logoutBtn = document.getElementById('logout-btn');
+    const logoutLink = document.getElementById('logout-link');
+
+    const handleLogout = async () => {
+        try {
+            await auth.signOut();
+            window.location.href = 'login.html';
+        } catch (error) {
+            console.error('Error signing out:', error);
+            utils.showToast('Error signing out', 'error');
+        }
+    };
+
+    logoutBtn?.addEventListener('click', handleLogout);
+    logoutLink?.addEventListener('click', (e) => {
+        e.preventDefault();
+        handleLogout();
+    });
+}
+
+function initializeFilters() {
+    // Time filter
+    const timeFilter = document.getElementById('timeFilter');
+    if (timeFilter) {
+        timeFilter.addEventListener('change', window.applyTimeFilter);
+    }
+
+    // Search filter (if exists)
+    const searchInput = document.getElementById('analytics-search');
+    if (searchInput) {
+        searchInput.addEventListener('input', utils.debounce((e) => {
+            state.searchQuery = e.target.value.trim();
+            applyFilters();
+        }, 300));
+    }
+
+    // Category filter (if exists)
+    const categoryFilter = document.getElementById('analytics-category-filter');
+    if (categoryFilter) {
+        categoryFilter.addEventListener('change', (e) => {
+            state.categoryFilter = e.target.value;
+            applyFilters();
+        });
+    }
+}
+
+// Responsive chart resize
+window.addEventListener('resize', utils.debounce(() => {
+    Object.values(state.charts).forEach(chart => {
+        if (chart && typeof chart.resize === 'function') {
+            chart.resize();
+        }
+    });
+}, 250));
+
+// Cleanup on unload
 window.addEventListener('beforeunload', () => {
-    if (eventsUnsubscribe) eventsUnsubscribe();
+    if (state.eventsUnsubscribe) {
+        state.eventsUnsubscribe();
+    }
+    Object.values(state.charts).forEach(chart => {
+        if (chart && typeof chart.destroy === 'function') {
+            chart.destroy();
+        }
+    });
 });
-
-// Done.

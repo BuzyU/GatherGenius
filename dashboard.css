@@ -204,12 +204,6 @@ body {
     color: var(--text-color);
 }
 
-.user-menu-btn img {
-    width: 35px;
-    height: 35px;
-    border-radius: 50%;
-}
-
 .user-dropdown {
     position: absolute;
     top: 100%;
@@ -375,7 +369,8 @@ body {
 
 .section-header {
     display: flex;
-    justify-content: space-between;
+    justify-content: center;
+    width: fit-content;
     align-items: center;
     margin-bottom: 20px;
 }
@@ -1472,7 +1467,7 @@ body {
         width: 100%;
         justify-content: space-between;
         padding: 10px;
-        background: var(--background-color);
+        background:none;
         border-radius: 8px;
     }
 
