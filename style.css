@@ -455,19 +455,20 @@ body {
 /* ========================================
    SECTIONS
    ======================================== */
-.recent-events,
+
 .settings-section,
 .profile-form-section,
 .security-section,
 .activity-section,
-.event-details-section {
+.event-details-section,
+.recent-events {
     background: white;
     border-radius: 16px;
     padding: 32px;
     margin-bottom: 32px;
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    width: 100%;
 }
-
 .security-section h3 {
     font-size: 1.5rem;
     color: var(--text-color);
@@ -705,9 +706,8 @@ select {
 /* ========================================
    BUTTONS
    ======================================== */
-.btn-primary,
-.btn-secondary,
-.btn-danger,
+/* Common button styles */
+[class^="btn-"],
 .create-event-btn,
 .submit-btn {
     padding: 10px 20px;
@@ -723,6 +723,7 @@ select {
     text-decoration: none;
 }
 
+/* Primary button variants */
 .btn-primary,
 .create-event-btn,
 .submit-btn {
@@ -745,6 +746,7 @@ select {
     transform: none;
 }
 
+/* Secondary button */
 .btn-secondary {
     background: var(--background-color);
     color: var(--text-color);
@@ -755,6 +757,7 @@ select {
     background: #e9ecef;
 }
 
+/* Danger button */
 .btn-danger {
     background: var(--danger-color);
     color: white;
@@ -913,6 +916,7 @@ select {
     font-size: 0.95rem;
 }
 
+/* Form input styles */
 .form-group input,
 .form-group textarea,
 .form-group select,
@@ -927,6 +931,7 @@ select {
     transition: all 0.3s ease;
 }
 
+/* Focus states */
 .form-group input:focus,
 .form-group textarea:focus,
 .form-group select:focus,
@@ -937,6 +942,7 @@ select {
     box-shadow: 0 0 0 3px rgba(255, 102, 0, 0.1);
 }
 
+/* Disabled states */
 .form-group input:disabled,
 .form-group textarea:disabled {
     background: #f8f9fa;
@@ -944,6 +950,7 @@ select {
     cursor: not-allowed;
 }
 
+/* Textarea specific */
 .form-group textarea {
     resize: vertical;
     min-height: 100px;
@@ -1063,40 +1070,46 @@ select {
     color: #333;
 }
 
-/* Toast for Login Page */
-body.login-page .toast {
+/* Toast variants */
+.toast {
     position: fixed;
-    top: 20px;
-    right: 20px;
     padding: 12px 24px;
     border-radius: 8px;
-    color: #fff;
     font-size: 0.9rem;
-    transform: translateY(-100%);
-    opacity: 0;
     transition: all 0.3s ease;
     z-index: 3000;
+    opacity: 0;
+}
+
+/* Default toast (for dashboard) */
+.dashboard .toast {
+    bottom: 30px;
+    right: 30px;
+    transform: translateX(400px);
+    min-width: 300px;
+}
+
+/* Login page toast */
+body.login-page .toast {
+    top: 20px;
+    right: 20px;
+    transform: translateY(-100%);
+    color: #fff;
     background: none;
     border-left: none;
     box-shadow: none;
-    display: block;
     min-width: auto;
 }
 
-body.login-page .toast.error {
-    background: var(--error-color);
-    border-left: none;
-}
-
-body.login-page .toast.success {
-    background: var(--success-color);
-    border-left: none;
-}
-
-body.login-page .toast.show {
-    transform: translateY(0);
+/* Toast states */
+.toast.show {
     opacity: 1;
+    transform: translateX(0) translateY(0);
 }
+
+/* Toast colors */
+body.login-page .toast.error { background: var(--error-color); }
+body.login-page .toast.success { background: var(--success-color); }
 
 /* ========================================
    NO EVENTS/DATA MESSAGE
@@ -1943,48 +1956,52 @@ h1 {
 /* ========================================
    DARK THEME
    ======================================== */
+/* Dark theme variables and overrides */
 [data-theme="dark"] {
     --text-color: #e9ecef;
     --background-color: #1a1a1a;
     --border-color: #495057;
+    --surface-dark: #2d3748;
+    --surface-darker: #374151;
+    --border-dark: #4b5563;
 }
 
-[data-theme="dark"] .settings-section,
-[data-theme="dark"] .profile-form-section,
-[data-theme="dark"] .security-section,
-[data-theme="dark"] .activity-section {
-    background: #2d3748;
-    color: var(--text-color);
-}
+/* Dark theme element overrides */
+[data-theme="dark"] {
+    /* Background colors */
+    & .settings-section,
+    & .profile-form-section,
+    & .security-section,
+    & .activity-section,
+    & .modal-content {
+        background: var(--surface-dark);
+        color: var(--text-color);
+    }
 
-[data-theme="dark"] .setting-item {
-    background: #374151;
-    border-color: #4b5563;
-}
+    & .setting-item {
+        background: var(--surface-darker);
+        border-color: var(--border-dark);
 
-[data-theme="dark"] .setting-item:hover {
-    border-color: var(--primary-color);
-}
+        &:hover {
+            border-color: var(--primary-color);
+        }
+    }
 
-[data-theme="dark"] .section-header {
-    border-color: #4b5563;
-}
+    & .setting-select,
+    & .setting-input {
+        background: var(--surface-darker);
+        border-color: var(--border-dark);
+        color: var(--text-color);
+    }
 
-[data-theme="dark"] .setting-select,
-[data-theme="dark"] .setting-input {
-    background: #374151;
-    border-color: #4b5563;
-    color: var(--text-color);
-}
+    & .section-header {
+        border-color: var(--border-dark);
+    }
 
-[data-theme="dark"] .modal-content {
-    background: #2d3748;
-    color: var(--text-color);
-}
-
-[data-theme="dark"] .warning-box {
-    background: #44403c;
-    border-color: #78716c;
+    & .warning-box {
+        background: #44403c;
+        border-color: #78716c;
+    }
 }
 
 /* ========================================
@@ -2167,7 +2184,7 @@ h1 {
         width: auto;
         justify-content: center;
         padding: 0;
-        background: none;
+        background: transparent;
         border-radius: 50%;
         box-shadow: none;
     }
@@ -2180,7 +2197,8 @@ h1 {
     .user-menu-btn .user-avatar {
         width: 40px;
         height: 40px;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+        box-shadow: none;
+        background: transparent;
     }
 
     .user-dropdown {
@@ -2457,39 +2475,6 @@ h1 {
         break-inside: avoid;
         page-break-inside: avoid;
     }
-}
-
-/* Warning Box */
-.warning-box {
-    background: #fff3cd;
-    border: 1px solid #ffeaa7;
-    border-radius: 8px;
-    padding: 20px;
-    margin-bottom: 24px;
-    text-align: center;
-}
-
-.warning-box i {
-    font-size: 2rem;
-    color: var(--warning-color);
-    margin-bottom: 12px;
-}
-
-.warning-box h3 {
-    color: #856404;
-    margin: 0 0 12px 0;
-}
-
-.warning-box p {
-    color: #856404;
-    margin: 0 0 12px 0;
-}
-
-.warning-box ul {
-    text-align: left;
-    color: #856404;
-    margin: 0;
-    padding-left: 20px;
 }
 
 /* Add these styles to your existing style.css file */
@@ -3143,6 +3128,7 @@ h1 {
     margin-bottom: 16px;
     display: -webkit-box;
     -webkit-line-clamp: 2;
+    line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
 }
@@ -4916,11 +4902,7 @@ h1 {
     }
 
     /* Events Grid Mobile */
-    .events-grid,
-    .teams-grid {
-        grid-template-columns: 1fr;
-        gap: 12px;
-    }
+
 
     .event-card,
     .team-card {
@@ -5837,10 +5819,7 @@ h1 {
 
     /* Events Grid Mobile */
     .events-grid,
-    .teams-grid {
-        grid-template-columns: 1fr;
-        gap: 12px;
-    }
+
 
     .event-card,
     .team-card {

@@ -755,6 +755,10 @@ modals.forEach(modal => {
 let touchStartX = 0;
 let touchEndX = 0;
 
+// Initialize sidebar element
+const sidebar = document.querySelector('.sidebar');
+
+// Add touch events if sidebar exists
 if (sidebar) {
     sidebar.addEventListener('touchstart', (e) => {
         touchStartX = e.changedTouches[0].screenX;
