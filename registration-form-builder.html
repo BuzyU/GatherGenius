@@ -1,0 +1,1498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edit Registration Form - GatherGenius</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .form-builder-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .builder-header {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .builder-header h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .builder-header p {
+            color: #666;
+            font-size: 0.95rem;
+        }
+
+        .builder-layout {
+            display: grid;
+            grid-template-columns: 1fr 400px;
+            gap: 30px;
+        }
+
+        .form-preview {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .preview-banner {
+            width: 100%;
+            height: 200px;
+            background: linear-gradient(135deg, #ff6600 0%, #ff8833 100%);
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            overflow: hidden;
+        }
+
+        .preview-banner:hover {
+            opacity: 0.9;
+        }
+
+        .preview-banner img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .preview-banner .upload-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.2rem;
+        }
+
+        .preview-banner:hover .upload-overlay {
+            display: flex;
+        }
+
+        .preview-header {
+            background: #ff6600;
+            color: white;
+            padding: 30px 40px;
+        }
+
+        .preview-header h2 {
+            margin-bottom: 5px;
+        }
+
+        .preview-content {
+            padding: 40px;
+        }
+
+        .questions-list {
+            margin-top: 30px;
+        }
+
+        .question-item {
+            background: #f8f9fa;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            position: relative;
+        }
+
+        .question-item.dragging {
+            opacity: 0.5;
+        }
+
+        .section-item {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 25px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+        }
+
+        .section-item h3 {
+            margin: 0 0 8px 0;
+            font-size: 1.3rem;
+        }
+
+        .section-item p {
+            margin: 0;
+            opacity: 0.9;
+        }
+
+        .section-actions {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            display: flex;
+            gap: 8px;
+        }
+
+        .photo-item {
+            background: #f8f9fa;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .photo-item img {
+            max-width: 100%;
+            border-radius: 8px;
+            margin-bottom: 10px;
+        }
+
+        .photo-placeholder {
+            width: 100%;
+            height: 200px;
+            background: #e9ecef;
+            border: 2px dashed #adb5bd;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #6c757d;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .photo-placeholder:hover {
+            background: #dee2e6;
+            border-color: #ff6600;
+        }
+
+        .question-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            margin-bottom: 15px;
+        }
+
+        .question-title {
+            flex: 1;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .question-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .icon-btn {
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            padding: 5px 10px;
+            color: #666;
+            transition: color 0.3s;
+        }
+
+        .icon-btn:hover {
+            color: #ff6600;
+        }
+
+        .icon-btn.delete:hover {
+            color: #dc3545;
+        }
+
+        .section-actions .icon-btn {
+            color: white;
+            background: rgba(255,255,255,0.2);
+            border-radius: 4px;
+        }
+
+        .section-actions .icon-btn:hover {
+            background: rgba(255,255,255,0.3);
+        }
+
+        .question-type-badge {
+            display: inline-block;
+            background: #e7f3ff;
+            color: #0d47a1;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            margin-bottom: 10px;
+        }
+
+        .form-builder-sidebar {
+            position: sticky;
+            top: 20px;
+            height: fit-content;
+        }
+
+        .sidebar-section {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .sidebar-section h3 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 1.1rem;
+        }
+
+        .add-question-types {
+            display: grid;
+            gap: 10px;
+        }
+
+        .add-question-btn {
+            width: 100%;
+            padding: 12px 15px;
+            background: #f8f9fa;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: all 0.3s;
+            font-size: 0.95rem;
+        }
+
+        .add-question-btn:hover {
+            background: #e9ecef;
+            border-color: #ff6600;
+        }
+
+        .add-question-btn i {
+            color: #ff6600;
+            width: 20px;
+        }
+
+        .add-question-btn.special {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+        }
+
+        .add-question-btn.special:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+
+        .add-question-btn.special i {
+            color: white;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #444;
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+
+        .form-group input,
+        .form-group textarea,
+        .form-group select {
+            width: 100%;
+            padding: 10px 12px;
+            border: 2px solid #e9ecef;
+            border-radius: 6px;
+            font-size: 0.95rem;
+            transition: border-color 0.3s;
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #ff6600;
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 100px;
+            font-family: inherit;
+        }
+
+        .color-picker-group {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .color-picker-group input[type="color"] {
+            width: 60px;
+            height: 40px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        .color-picker-group input[type="text"] {
+            flex: 1;
+        }
+
+        .save-buttons {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn-primary,
+        .btn-secondary {
+            flex: 1;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: #ff6600;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #e55b00;
+            transform: translateY(-2px);
+        }
+
+        .btn-secondary {
+            background: #f8f9fa;
+            color: #333;
+            border: 2px solid #e9ecef;
+        }
+
+        .btn-secondary:hover {
+            background: #e9ecef;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.show {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 600px;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            padding: 25px;
+            border-bottom: 1px solid #e9ecef;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-header h3 {
+            margin: 0;
+            color: #333;
+        }
+
+        .close-modal {
+            background: transparent;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: #666;
+            padding: 0;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-body {
+            padding: 25px;
+        }
+
+        .modal-footer {
+            padding: 20px 25px;
+            border-top: 1px solid #e9ecef;
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+
+        .options-editor {
+            margin-top: 15px;
+        }
+
+        .option-item {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .option-item input {
+            flex: 1;
+        }
+
+        .add-option-btn {
+            background: #f8f9fa;
+            border: 2px dashed #e9ecef;
+            border-radius: 6px;
+            padding: 10px;
+            cursor: pointer;
+            color: #666;
+            text-align: center;
+            transition: all 0.3s;
+        }
+
+        .add-option-btn:hover {
+            background: #e9ecef;
+            border-color: #ff6600;
+            color: #ff6600;
+        }
+
+        .checkbox-group {
+            margin-top: 10px;
+        }
+
+        .checkbox-label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            padding: 8px 0;
+        }
+
+        .checkbox-label input {
+            width: auto;
+            margin: 0;
+        }
+
+        .file-upload-area {
+            border: 2px dashed #e9ecef;
+            border-radius: 8px;
+            padding: 30px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: #f8f9fa;
+        }
+
+        .file-upload-area:hover {
+            border-color: #ff6600;
+            background: #fff;
+        }
+
+        .file-upload-area i {
+            font-size: 2rem;
+            color: #ff6600;
+            margin-bottom: 10px;
+        }
+
+        .image-preview {
+            margin-top: 15px;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .image-preview img {
+            max-width: 100%;
+            display: block;
+        }
+
+        @media (max-width: 1024px) {
+            .builder-layout {
+                grid-template-columns: 1fr;
+            }
+
+            .form-builder-sidebar {
+                position: static;
+            }
+        }
+
+        .toast {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            background: white;
+            padding: 15px 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 2000;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 0.3s;
+        }
+
+        .toast.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .toast.toast-success {
+            border-left: 4px solid #28a745;
+        }
+
+        .toast.toast-error {
+            border-left: 4px solid #dc3545;
+        }
+
+        .toast i {
+            font-size: 1.2rem;
+        }
+
+        .toast-success i {
+            color: #28a745;
+        }
+
+        .toast-error i {
+            color: #dc3545;
+        }
+
+        .back-btn {
+            background: #f8f9fa;
+            border: 2px solid #e9ecef;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: #333;
+            text-decoration: none;
+            transition: all 0.3s;
+            margin-bottom: 20px;
+        }
+
+        .back-btn:hover {
+            background: #e9ecef;
+            transform: translateX(-5px);
+        }
+    </style>
+</head>
+<body>
+    <div class="form-builder-container">
+        <div class="builder-header">
+            <a href="#" class="back-btn" onclick="window.history.back(); return false;">
+                <i class="fas fa-arrow-left"></i> Back to Event
+            </a>
+            <h1>Edit Registration Form</h1>
+            <p>Customize the registration form for your event with sections, images, and custom questions</p>
+        </div>
+
+        <div class="builder-layout">
+            <!-- Form Preview -->
+            <div class="form-preview">
+                <!-- Banner -->
+                <div class="preview-banner" id="previewBanner" onclick="uploadBanner()">
+                    <div class="upload-overlay">
+                        <div>
+                            <i class="fas fa-camera"></i>
+                            <p>Click to upload banner</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Header -->
+                <div class="preview-header" id="previewHeader">
+                    <h2 id="previewEventName">Event Registration</h2>
+                    <p id="previewEventDesc">Registration form preview</p>
+                </div>
+
+                <!-- Content -->
+                <div class="preview-content">
+                    <div class="questions-list" id="questionsList">
+                        <p style="color: #999; text-align: center;">Add sections, photos, and questions from the sidebar</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sidebar -->
+            <div class="form-builder-sidebar">
+                <!-- Add Elements Section -->
+                <div class="sidebar-section">
+                    <h3>Add Elements</h3>
+                    <div class="add-question-types">
+                        <button class="add-question-btn special" onclick="addSection()">
+                            <i class="fas fa-folder-plus"></i>
+                            Add Section
+                        </button>
+                        <button class="add-question-btn special" onclick="addPhoto()">
+                            <i class="fas fa-image"></i>
+                            Add Photo
+                        </button>
+                        <hr style="margin: 10px 0; border: none; border-top: 1px solid #e9ecef;">
+                        <button class="add-question-btn" onclick="addQuestion('text')">
+                            <i class="fas fa-font"></i>
+                            Short Answer
+                        </button>
+                        <button class="add-question-btn" onclick="addQuestion('textarea')">
+                            <i class="fas fa-align-left"></i>
+                            Paragraph
+                        </button>
+                        <button class="add-question-btn" onclick="addQuestion('radio')">
+                            <i class="fas fa-dot-circle"></i>
+                            Multiple Choice
+                        </button>
+                        <button class="add-question-btn" onclick="addQuestion('checkbox')">
+                            <i class="fas fa-check-square"></i>
+                            Checkboxes
+                        </button>
+                        <button class="add-question-btn" onclick="addQuestion('select')">
+                            <i class="fas fa-caret-square-down"></i>
+                            Dropdown
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Banner Customization -->
+                <div class="sidebar-section">
+                    <h3>Banner & Colors</h3>
+                    <div class="form-group">
+                        <label>Header Background Color</label>
+                        <div class="color-picker-group">
+                            <input type="color" id="headerColor" value="#ff6600" onchange="updateHeaderColor()">
+                            <input type="text" id="headerColorText" value="#ff6600" onchange="updateHeaderColorFromText()">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Banner Image</label>
+                        <button class="btn-secondary" onclick="uploadBanner()" style="width: 100%;">
+                            <i class="fas fa-upload"></i> Upload Banner
+                        </button>
+                        <button class="btn-secondary" onclick="removeBanner()" style="width: 100%; margin-top: 10px;">
+                            <i class="fas fa-times"></i> Remove Banner
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Confirmation Message -->
+                <div class="sidebar-section">
+                    <h3>Confirmation Message</h3>
+                    <div class="form-group">
+                        <label>Custom Success Message</label>
+                        <textarea id="confirmationMessage" placeholder="Thank you for registering! We look forward to seeing you at the event."></textarea>
+                    </div>
+                </div>
+
+                <!-- Save Actions -->
+                <div class="sidebar-section">
+                    <div class="save-buttons">
+                        <button class="btn-secondary" onclick="previewForm()">
+                            <i class="fas fa-eye"></i> Preview
+                        </button>
+                        <button class="btn-primary" onclick="saveForm()">
+                            <i class="fas fa-save"></i> Save
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Question Edit Modal -->
+    <div id="editQuestionModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Edit Question</h3>
+                <button class="close-modal" onclick="closeEditModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Question Text *</label>
+                    <input type="text" id="editQuestionText" placeholder="Enter your question">
+                </div>
+
+                <div class="form-group">
+                    <label>Helper Text (Optional)</label>
+                    <input type="text" id="editHelperText" placeholder="Additional guidance for respondents">
+                </div>
+
+                <div class="form-group">
+                    <label>Placeholder (Optional)</label>
+                    <input type="text" id="editPlaceholder" placeholder="Placeholder text">
+                </div>
+
+                <div id="optionsEditor" class="options-editor" style="display: none;">
+                    <label>Options *</label>
+                    <div id="optionsList"></div>
+                    <div class="add-option-btn" onclick="addOption()">
+                        <i class="fas fa-plus"></i> Add Option
+                    </div>
+                </div>
+
+                <div class="checkbox-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="editRequired">
+                        <span>Required question</span>
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="closeEditModal()">Cancel</button>
+                <button class="btn-primary" onclick="saveQuestion()">Save Question</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Section Edit Modal -->
+    <div id="editSectionModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Edit Section</h3>
+                <button class="close-modal" onclick="closeSectionModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Section Title *</label>
+                    <input type="text" id="editSectionTitle" placeholder="Enter section title">
+                </div>
+
+                <div class="form-group">
+                    <label>Section Description (Optional)</label>
+                    <textarea id="editSectionDescription" placeholder="Brief description for this section" rows="3"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="closeSectionModal()">Cancel</button>
+                <button class="btn-primary" onclick="saveSection()">Save Section</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Photo Upload Modal -->
+    <div id="uploadPhotoModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Add Photo</h3>
+                <button class="close-modal" onclick="closePhotoModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Photo Caption (Optional)</label>
+                    <input type="text" id="photoCaption" placeholder="Enter photo caption">
+                </div>
+
+                <div class="form-group">
+                    <label>Upload Photo *</label>
+                    <div class="file-upload-area" onclick="document.getElementById('photoInput').click()">
+                        <i class="fas fa-cloud-upload-alt"></i>
+                        <p>Click to upload image</p>
+                        <small style="color: #666;">Supported: JPG, PNG, GIF (Max 5MB)</small>
+                    </div>
+                    <input type="file" id="photoInput" accept="image/*" style="display: none;" onchange="handlePhotoUpload(event)">
+                    <div id="photoPreview" class="image-preview" style="display: none;"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="closePhotoModal()">Cancel</button>
+                <button class="btn-primary" onclick="savePhoto()">Add Photo</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden file input for banner -->
+    <input type="file" id="bannerInput" accept="image/*" style="display: none;" onchange="handleBannerUpload(event)">
+
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-storage.js"></script>
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyCKd_iH-McAMrKI_0YDoYG0xjn2KrQpTOQ",
+            authDomain: "notifyme-events.firebaseapp.com",
+            projectId: "notifyme-events",
+            storageBucket: "notifyme-events.appspot.com",
+            messagingSenderId: "761571632545",
+            appId: "1:761571632545:web:547a7210fdebf366df97e0",
+            measurementId: "G-309BJ6P79V"
+        };
+
+        if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+        }
+
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+        const storage = firebase.storage();
+        const eventId = new URLSearchParams(window.location.search).get('id');
+
+        let currentEvent = null;
+        let formElements = []; // Combined array for questions, sections, and photos
+        let editingElementIndex = null;
+        let bannerUrl = '';
+        let headerColor = '#ff6600';
+        let currentPhotoData = null;
+
+        if (!eventId) {
+            alert('Invalid event ID');
+            window.location.href = 'events.html';
+        }
+
+        // Load event data
+        auth.onAuthStateChanged(async (user) => {
+            if (!user) {
+                window.location.href = 'login.html';
+                return;
+            }
+
+            try {
+                const eventDoc = await db.collection('events').doc(eventId).get();
+                if (!eventDoc.exists) {
+                    alert('Event not found');
+                    window.location.href = 'events.html';
+                    return;
+                }
+
+                currentEvent = { id: eventDoc.id, ...eventDoc.data() };
+
+                if (currentEvent.createdBy !== user.uid) {
+                    alert('Only event organizers can edit the registration form');
+                    window.location.href = `event-details.html?id=${eventId}`;
+                    return;
+                }
+
+                // Load existing form configuration
+                formElements = currentEvent.formElements || currentEvent.customQuestions?.map(q => ({...q, type: q.type, elementType: 'question'})) || [];
+                bannerUrl = currentEvent.bannerUrl || '';
+                headerColor = currentEvent.headerColor || '#ff6600';
+                const confirmationMsg = currentEvent.confirmationMessage || '';
+                
+                document.getElementById('previewEventName').textContent = currentEvent.name;
+                document.getElementById('previewEventDesc').textContent = 'Registration form for ' + currentEvent.name;
+                document.getElementById('confirmationMessage').value = confirmationMsg;
+                document.getElementById('headerColor').value = headerColor;
+                document.getElementById('headerColorText').value = headerColor;
+
+                if (bannerUrl) {
+                    updateBannerPreview(bannerUrl);
+                }
+                updateHeaderColor();
+                renderElements();
+            } catch (error) {
+                console.error('Error loading event:', error);
+                alert('Error loading event');
+            }
+        });
+
+        // Add section
+        function addSection() {
+            const section = {
+                id: Date.now().toString(),
+                elementType: 'section',
+                title: 'New Section',
+                description: ''
+            };
+
+            formElements.push(section);
+            renderElements();
+            
+            editingElementIndex = formElements.length - 1;
+            openSectionModal(formElements.length - 1);
+        }
+
+        // Add photo
+        function addPhoto() {
+            editingElementIndex = formElements.length;
+            currentPhotoData = null;
+            document.getElementById('photoCaption').value = '';
+            document.getElementById('photoPreview').style.display = 'none';
+            document.getElementById('uploadPhotoModal').classList.add('show');
+        }
+
+        // Add question
+        function addQuestion(type) {
+            const question = {
+                id: Date.now().toString(),
+                elementType: 'question',
+                type: type,
+                question: 'Untitled Question',
+                required: false,
+                placeholder: '',
+                helperText: '',
+                options: type === 'radio' || type === 'checkbox' || type === 'select' ? ['Option 1'] : []
+            };
+
+            formElements.push(question);
+            renderElements();
+            
+            editingElementIndex = formElements.length - 1;
+            openEditModal(formElements.length - 1);
+        }
+
+        // Render all elements
+        function renderElements() {
+            const container = document.getElementById('questionsList');
+            
+            if (formElements.length === 0) {
+                container.innerHTML = '<p style="color: #999; text-align: center;">Add sections, photos, and questions from the sidebar</p>';
+                return;
+            }
+
+            container.innerHTML = formElements.map((element, index) => {
+                if (element.elementType === 'section') {
+                    return renderSection(element, index);
+                } else if (element.elementType === 'photo') {
+                    return renderPhoto(element, index);
+                } else {
+                    return renderQuestion(element, index);
+                }
+            }).join('');
+
+            initDragAndDrop();
+        }
+
+        function renderSection(section, index) {
+            return `
+                <div class="section-item" draggable="true" data-index="${index}">
+                    <div class="section-actions">
+                        <button class="icon-btn" onclick="editSection(${index})" title="Edit">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="icon-btn" onclick="duplicateElement(${index})" title="Duplicate">
+                            <i class="fas fa-copy"></i>
+                        </button>
+                        <button class="icon-btn delete" onclick="deleteElement(${index})" title="Delete">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                    <h3>${section.title}</h3>
+                    ${section.description ? `<p>${section.description}</p>` : ''}
+                </div>
+            `;
+        }
+
+        function renderPhoto(photo, index) {
+            return `
+                <div class="photo-item" draggable="true" data-index="${index}">
+                    <div class="question-header">
+                        <div style="flex: 1;"></div>
+                        <div class="question-actions">
+                            <button class="icon-btn" onclick="editPhoto(${index})" title="Edit">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button class="icon-btn delete" onclick="deleteElement(${index})" title="Delete">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <img src="${photo.url}" alt="${photo.caption || 'Photo'}" style="max-height: 300px;">
+                    ${photo.caption ? `<p style="margin-top: 10px; color: #666;">${photo.caption}</p>` : ''}
+                </div>
+            `;
+        }
+
+        function renderQuestion(q, index) {
+            return `
+                <div class="question-item" draggable="true" data-index="${index}">
+                    <div class="question-header">
+                        <div class="question-title">
+                            <span class="question-type-badge">${getTypeLabel(q.type)}</span>
+                            <div>${q.question} ${q.required ? '<span style="color: #dc3545;">*</span>' : ''}</div>
+                        </div>
+                        <div class="question-actions">
+                            <button class="icon-btn" onclick="editQuestion(${index})" title="Edit">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button class="icon-btn" onclick="duplicateElement(${index})" title="Duplicate">
+                                <i class="fas fa-copy"></i>
+                            </button>
+                            <button class="icon-btn delete" onclick="deleteElement(${index})" title="Delete">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                    ${q.helperText ? `<p style="color: #666; font-size: 0.85rem; margin-top: 5px;">${q.helperText}</p>` : ''}
+                    ${renderQuestionPreview(q)}
+                </div>
+            `;
+        }
+
+        function getTypeLabel(type) {
+            const labels = {
+                'text': 'Short Answer',
+                'textarea': 'Paragraph',
+                'radio': 'Multiple Choice',
+                'checkbox': 'Checkboxes',
+                'select': 'Dropdown'
+            };
+            return labels[type] || type;
+        }
+
+        function renderQuestionPreview(q) {
+            switch(q.type) {
+                case 'text':
+                    return `<input type="text" class="form-input" placeholder="${q.placeholder || 'Your answer'}" disabled style="margin-top: 10px;">`;
+                case 'textarea':
+                    return `<textarea class="form-textarea" placeholder="${q.placeholder || 'Your answer'}" disabled style="margin-top: 10px; min-height: 80px;"></textarea>`;
+                case 'radio':
+                    return `<div style="margin-top: 10px;">${q.options.map(opt => `
+                        <label style="display: flex; align-items: center; padding: 8px 0;">
+                            <input type="radio" name="preview_${q.id}" disabled style="margin-right: 10px;">
+                            <span>${opt}</span>
+                        </label>
+                    `).join('')}</div>`;
+                case 'checkbox':
+                    return `<div style="margin-top: 10px;">${q.options.map(opt => `
+                        <label style="display: flex; align-items: center; padding: 8px 0;">
+                            <input type="checkbox" disabled style="margin-right: 10px;">
+                            <span>${opt}</span>
+                        </label>
+                    `).join('')}</div>`;
+                case 'select':
+                    return `<select class="form-select" disabled style="margin-top: 10px;">
+                        <option>Select an option</option>
+                        ${q.options.map(opt => `<option>${opt}</option>`).join('')}
+                    </select>`;
+                default:
+                    return '';
+            }
+        }
+
+        // Edit section
+        function editSection(index) {
+            editingElementIndex = index;
+            openSectionModal(index);
+        }
+
+        function openSectionModal(index) {
+            const section = formElements[index];
+            document.getElementById('editSectionTitle').value = section.title;
+            document.getElementById('editSectionDescription').value = section.description || '';
+            document.getElementById('editSectionModal').classList.add('show');
+        }
+
+        function closeSectionModal() {
+            document.getElementById('editSectionModal').classList.remove('show');
+            editingElementIndex = null;
+        }
+
+        function saveSection() {
+            if (editingElementIndex === null) return;
+
+            const title = document.getElementById('editSectionTitle').value.trim();
+            if (!title) {
+                alert('Section title is required');
+                return;
+            }
+
+            formElements[editingElementIndex].title = title;
+            formElements[editingElementIndex].description = document.getElementById('editSectionDescription').value.trim();
+
+            closeSectionModal();
+            renderElements();
+        }
+
+        // Photo handling
+        function editPhoto(index) {
+            editingElementIndex = index;
+            const photo = formElements[index];
+            currentPhotoData = photo.url;
+            document.getElementById('photoCaption').value = photo.caption || '';
+            
+            const preview = document.getElementById('photoPreview');
+            preview.innerHTML = `<img src="${photo.url}" alt="Preview">`;
+            preview.style.display = 'block';
+            
+            document.getElementById('uploadPhotoModal').classList.add('show');
+        }
+
+        function handlePhotoUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            if (file.size > 5 * 1024 * 1024) {
+                alert('File size must be less than 5MB');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                currentPhotoData = e.target.result;
+                const preview = document.getElementById('photoPreview');
+                preview.innerHTML = `<img src="${e.target.result}" alt="Preview">`;
+                preview.style.display = 'block';
+            };
+            reader.readAsDataURL(file);
+        }
+
+        async function savePhoto() {
+            if (!currentPhotoData) {
+                alert('Please upload a photo');
+                return;
+            }
+
+            const caption = document.getElementById('photoCaption').value.trim();
+
+            try {
+                let photoUrl = currentPhotoData;
+
+                // If it's a new upload (base64), upload to Firebase Storage
+                if (currentPhotoData.startsWith('data:')) {
+                    showToast('Uploading photo...', 'info');
+                    
+                    const photoRef = storage.ref().child(`event-photos/${eventId}/${Date.now()}.jpg`);
+                    await photoRef.putString(currentPhotoData, 'data_url');
+                    photoUrl = await photoRef.getDownloadURL();
+                }
+
+                const photoElement = {
+                    id: Date.now().toString(),
+                    elementType: 'photo',
+                    url: photoUrl,
+                    caption: caption
+                };
+
+                if (editingElementIndex !== null && editingElementIndex < formElements.length) {
+                    formElements[editingElementIndex] = photoElement;
+                } else {
+                    formElements.push(photoElement);
+                }
+
+                closePhotoModal();
+                renderElements();
+                showToast('Photo added successfully', 'success');
+            } catch (error) {
+                console.error('Error uploading photo:', error);
+                showToast('Error uploading photo', 'error');
+            }
+        }
+
+        function closePhotoModal() {
+            document.getElementById('uploadPhotoModal').classList.remove('show');
+            document.getElementById('photoInput').value = '';
+            currentPhotoData = null;
+            editingElementIndex = null;
+        }
+
+        // Banner handling
+        function uploadBanner() {
+            document.getElementById('bannerInput').click();
+        }
+
+        async function handleBannerUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            if (file.size > 5 * 1024 * 1024) {
+                alert('File size must be less than 5MB');
+                return;
+            }
+
+            try {
+                showToast('Uploading banner...', 'info');
+                
+                const reader = new FileReader();
+                reader.onload = async (e) => {
+                    const bannerRef = storage.ref().child(`event-banners/${eventId}/banner_${Date.now()}.jpg`);
+                    await bannerRef.putString(e.target.result, 'data_url');
+                    bannerUrl = await bannerRef.getDownloadURL();
+                    
+                    updateBannerPreview(bannerUrl);
+                    showToast('Banner uploaded successfully', 'success');
+                };
+                reader.readAsDataURL(file);
+            } catch (error) {
+                console.error('Error uploading banner:', error);
+                showToast('Error uploading banner', 'error');
+            }
+        }
+
+        function updateBannerPreview(url) {
+            const banner = document.getElementById('previewBanner');
+            banner.innerHTML = `
+                <img src="${url}" alt="Banner">
+                <div class="upload-overlay">
+                    <div>
+                        <i class="fas fa-camera"></i>
+                        <p>Click to change banner</p>
+                    </div>
+                </div>
+            `;
+        }
+
+        function removeBanner() {
+            if (confirm('Are you sure you want to remove the banner?')) {
+                bannerUrl = '';
+                const banner = document.getElementById('previewBanner');
+                banner.innerHTML = `
+                    <div class="upload-overlay">
+                        <div>
+                            <i class="fas fa-camera"></i>
+                            <p>Click to upload banner</p>
+                        </div>
+                    </div>
+                `;
+                showToast('Banner removed', 'success');
+            }
+        }
+
+        // Header color
+        function updateHeaderColor() {
+            const color = document.getElementById('headerColor').value;
+            headerColor = color;
+            document.getElementById('headerColorText').value = color;
+            document.getElementById('previewHeader').style.background = color;
+        }
+
+        function updateHeaderColorFromText() {
+            const color = document.getElementById('headerColorText').value;
+            if (/^#[0-9A-F]{6}$/i.test(color)) {
+                headerColor = color;
+                document.getElementById('headerColor').value = color;
+                document.getElementById('previewHeader').style.background = color;
+            }
+        }
+
+        // Edit question
+        function editQuestion(index) {
+            editingElementIndex = index;
+            openEditModal(index);
+        }
+
+        function openEditModal(index) {
+            const question = formElements[index];
+            
+            document.getElementById('editQuestionText').value = question.question;
+            document.getElementById('editHelperText').value = question.helperText || '';
+            document.getElementById('editPlaceholder').value = question.placeholder || '';
+            document.getElementById('editRequired').checked = question.required;
+
+            const optionsEditor = document.getElementById('optionsEditor');
+            if (question.type === 'radio' || question.type === 'checkbox' || question.type === 'select') {
+                optionsEditor.style.display = 'block';
+                renderOptions(question.options);
+            } else {
+                optionsEditor.style.display = 'none';
+            }
+
+            document.getElementById('editQuestionModal').classList.add('show');
+        }
+
+        function closeEditModal() {
+            document.getElementById('editQuestionModal').classList.remove('show');
+            editingElementIndex = null;
+        }
+
+        function renderOptions(options) {
+            const container = document.getElementById('optionsList');
+            container.innerHTML = options.map((opt, i) => `
+                <div class="option-item">
+                    <input type="text" class="form-input" value="${opt}" onchange="updateOption(${i}, this.value)">
+                    <button class="icon-btn delete" onclick="removeOption(${i})">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            `).join('');
+        }
+
+        function updateOption(index, value) {
+            if (editingElementIndex !== null) {
+                formElements[editingElementIndex].options[index] = value;
+            }
+        }
+
+        function addOption() {
+            if (editingElementIndex !== null) {
+                formElements[editingElementIndex].options.push('Option ' + (formElements[editingElementIndex].options.length + 1));
+                renderOptions(formElements[editingElementIndex].options);
+            }
+        }
+
+        function removeOption(index) {
+            if (editingElementIndex !== null && formElements[editingElementIndex].options.length > 1) {
+                formElements[editingElementIndex].options.splice(index, 1);
+                renderOptions(formElements[editingElementIndex].options);
+            }
+        }
+
+        function saveQuestion() {
+            if (editingElementIndex === null) return;
+
+            const question = document.getElementById('editQuestionText').value.trim();
+            if (!question) {
+                alert('Question text is required');
+                return;
+            }
+
+            formElements[editingElementIndex].question = question;
+            formElements[editingElementIndex].helperText = document.getElementById('editHelperText').value.trim();
+            formElements[editingElementIndex].placeholder = document.getElementById('editPlaceholder').value.trim();
+            formElements[editingElementIndex].required = document.getElementById('editRequired').checked;
+
+            closeEditModal();
+            renderElements();
+        }
+
+        // Delete element
+        function deleteElement(index) {
+            if (confirm('Are you sure you want to delete this element?')) {
+                formElements.splice(index, 1);
+                renderElements();
+            }
+        }
+
+        // Duplicate element
+        function duplicateElement(index) {
+            const element = JSON.parse(JSON.stringify(formElements[index]));
+            element.id = Date.now().toString();
+            if (element.elementType === 'question') {
+                element.question = element.question + ' (Copy)';
+            } else if (element.elementType === 'section') {
+                element.title = element.title + ' (Copy)';
+            }
+            formElements.push(element);
+            renderElements();
+        }
+
+        // Drag and drop
+        function initDragAndDrop() {
+            const items = document.querySelectorAll('[draggable="true"]');
+            items.forEach(item => {
+                item.addEventListener('dragstart', handleDragStart);
+                item.addEventListener('dragover', handleDragOver);
+                item.addEventListener('drop', handleDrop);
+                item.addEventListener('dragend', handleDragEnd);
+            });
+        }
+
+        let draggedIndex = null;
+
+        function handleDragStart(e) {
+            draggedIndex = parseInt(this.dataset.index);
+            this.classList.add('dragging');
+        }
+
+        function handleDragOver(e) {
+            e.preventDefault();
+        }
+
+        function handleDrop(e) {
+            e.preventDefault();
+            const dropIndex = parseInt(this.dataset.index);
+            
+            if (draggedIndex !== null && draggedIndex !== dropIndex) {
+                const draggedItem = formElements[draggedIndex];
+                formElements.splice(draggedIndex, 1);
+                formElements.splice(dropIndex, 0, draggedItem);
+                renderElements();
+            }
+        }
+
+        function handleDragEnd() {
+            this.classList.remove('dragging');
+            draggedIndex = null;
+        }
+
+        // Preview form
+        function previewForm() {
+            const url = `registration.html?eventId=${eventId}`;
+            window.open(url, '_blank');
+        }
+
+        // Save form
+        async function saveForm() {
+            const confirmationMessage = document.getElementById('confirmationMessage').value.trim();
+
+            try {
+                showToast('Saving form...', 'info');
+
+                // Separate questions from other elements for backward compatibility
+                const customQuestions = formElements
+                    .filter(e => e.elementType === 'question')
+                    .map(({ elementType, ...q }) => q);
+
+                await db.collection('events').doc(eventId).update({
+                    formElements: formElements,
+                    customQuestions: customQuestions, // For backward compatibility
+                    bannerUrl: bannerUrl || null,
+                    headerColor: headerColor,
+                    confirmationMessage: confirmationMessage || 'Thank you for registering! We look forward to seeing you at the event.',
+                    lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
+                });
+
+                showToast('Registration form saved successfully!', 'success');
+            } catch (error) {
+                console.error('Error saving form:', error);
+                showToast('Error saving form', 'error');
+            }
+        }
+
+        function showToast(message, type) {
+            const existingToasts = document.querySelectorAll('.toast');
+            existingToasts.forEach(t => t.remove());
+
+            const toast = document.createElement('div');
+            toast.className = `toast toast-${type}`;
+            toast.innerHTML = `
+                <i class="fas ${type === 'success' ? 'fa-check-circle' : type === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle'}"></i>
+                <span>${message}</span>
+            `;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.classList.add('show'), 100);
+            setTimeout(() => {
+                toast.classList.remove('show');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        // Close modals on outside click
+        document.getElementById('editQuestionModal').addEventListener('click', (e) => {
+            if (e.target.id === 'editQuestionModal') closeEditModal();
+        });
+
+        document.getElementById('editSectionModal').addEventListener('click', (e) => {
+            if (e.target.id === 'editSectionModal') closeSectionModal();
+        });
+
+        document.getElementById('uploadPhotoModal').addEventListener('click', (e) => {
+            if (e.target.id === 'uploadPhotoModal') closePhotoModal();
+        });
+
+        // Close modals on ESC key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                closeEditModal();
+                closeSectionModal();
+                closePhotoModal();
+            }
+        });
+    </script>
+</body>
+</html>

@@ -25,51 +25,96 @@
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: linear-gradient(135deg, rgba(255,102,0,0.1) 0%, rgba(255,136,0,0.1) 100%), #f5f5f5;
-            background-size: cover;
-            background-position: center;
-            background-repeat: no-repeat;
             min-height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
             padding: 20px;
         }
 
         .registration-container {
             background: #fff;
-            border-radius: 20px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-            max-width: 600px;
-            width: 100%;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            max-width: 800px;
+            margin: 0 auto;
             overflow: hidden;
         }
 
-        .registration-header {
-            text-align: center;
-            padding: 40px 40px 30px;
-            border-bottom: 1px solid #f0f0f0;
+        .form-header {
+            background: var(--primary-color);
+            color: white;
+            padding: 40px 50px;
+            border-top: 10px solid var(--primary-dark);
         }
 
-        .registration-header h1 {
-            color: var(--text-color);
+        .form-header h1 {
             font-size: 2rem;
             margin-bottom: 10px;
         }
 
-        .registration-header p {
-            color: #666;
-            font-size: 0.95rem;
+        .form-header p {
+            font-size: 1rem;
+            opacity: 0.95;
+        }
+
+        .auth-required {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 20px 50px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .auth-required i {
+            font-size: 1.5rem;
+            color: #856404;
+        }
+
+        .auth-required-text {
+            flex: 1;
+        }
+
+        .auth-required-text h3 {
+            color: #856404;
+            margin-bottom: 5px;
+        }
+
+        .auth-required-text p {
+            color: #856404;
+            font-size: 0.9rem;
+        }
+
+        .google-signin-btn {
+            background: white;
+            color: #444;
+            border: 1px solid #ddd;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 500;
+            transition: box-shadow 0.3s;
+        }
+
+        .google-signin-btn:hover {
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+
+        .google-signin-btn img {
+            width: 20px;
+            height: 20px;
         }
 
         .event-info {
             background: #f8f9fa;
-            padding: 25px 40px;
+            padding: 30px 50px;
             border-bottom: 1px solid #e9ecef;
         }
 
         .event-info h2 {
             color: var(--text-color);
-            margin-bottom: 15px;
+            margin-bottom: 20px;
             font-size: 1.3rem;
         }
 
@@ -86,61 +131,162 @@
             color: var(--primary-color);
         }
 
-        .registration-form {
-            padding: 30px 40px 40px;
+        .form-content {
+            padding: 30px 50px 50px;
         }
 
-        .form-group {
+        .form-section {
+            margin-bottom: 40px;
+            padding-bottom: 30px;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .form-section:last-child {
+            border-bottom: none;
+        }
+
+        .section-title {
+            font-size: 1.2rem;
+            color: var(--text-color);
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+
+        .section-description {
+            color: #666;
+            font-size: 0.9rem;
             margin-bottom: 20px;
-            text-align: left;
         }
 
-        .form-group label {
-            display: block;
-            margin-bottom: 5px;
-            color: #444;
+        .form-question {
+            margin-bottom: 30px;
+        }
+
+        .question-label {
+            display: flex;
+            align-items: center;
+            margin-bottom: 12px;
+            font-size: 1rem;
+            color: var(--text-color);
+        }
+
+        .required-indicator {
+            color: var(--error-color);
+            margin-left: 4px;
+        }
+
+        .question-helper {
+            color: #666;
+            font-size: 0.85rem;
+            margin-top: 6px;
+        }
+
+        .form-input,
+        .form-textarea,
+        .form-select {
+            width: 100%;
+            padding: 12px 15px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            font-size: 1rem;
+            font-family: inherit;
+            transition: all 0.3s;
+            background: white;
+        }
+
+        .form-input:focus,
+        .form-textarea:focus,
+        .form-select:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(255, 102, 0, 0.1);
+        }
+
+        .form-input:disabled,
+        .form-textarea:disabled {
+            background: #f5f5f5;
+            color: #666;
+        }
+
+        .form-textarea {
+            resize: vertical;
+            min-height: 100px;
+        }
+
+        .radio-group,
+        .checkbox-group {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .radio-option,
+        .checkbox-option {
+            display: flex;
+            align-items: center;
+            padding: 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .radio-option:hover,
+        .checkbox-option:hover {
+            background: #f8f9fa;
+            border-color: var(--primary-color);
+        }
+
+        .radio-option input,
+        .checkbox-option input {
+            margin-right: 12px;
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
+        .pre-filled-notice {
+            background: #e7f3ff;
+            border-left: 4px solid #2196F3;
+            padding: 12px 15px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+        }
+
+        .pre-filled-notice i {
+            color: #2196F3;
+            margin-right: 8px;
+        }
+
+        .pre-filled-notice span {
+            color: #0d47a1;
             font-size: 0.9rem;
         }
 
-        .form-group input,
-        .form-group textarea {
-            width: 100%;
-            padding: 12px 15px;
-            border: 2px solid var(--border-color);
-            border-radius: 8px;
-            font-size: 1rem;
-            transition: border-color 0.3s ease;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        }
-
-        .form-group input:focus,
-        .form-group textarea:focus {
-            outline: none;
-            border-color: var(--primary-color);
-            box-shadow: 0 0 5px rgba(255,102,0,0.3);
-        }
-
-        .form-group textarea {
-            resize: vertical;
-            min-height: 80px;
+        .submit-section {
+            padding-top: 20px;
+            text-align: center;
         }
 
         .submit-btn {
-            width: 100%;
-            padding: 14px;
             background: var(--primary-color);
-            color: #fff;
+            color: white;
             border: none;
-            border-radius: 8px;
+            padding: 14px 40px;
             font-size: 1rem;
             font-weight: 600;
+            border-radius: 4px;
             cursor: pointer;
-            transition: all 0.3s ease;
+            transition: all 0.3s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
         }
 
         .submit-btn:hover {
             background: var(--primary-dark);
             transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(255, 102, 0, 0.3);
         }
 
         .submit-btn:disabled {
@@ -149,19 +295,155 @@
             transform: none;
         }
 
-        .loading-spinner {
+        .success-modal {
             display: none;
-            text-align: center;
-            padding: 60px 40px;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
         }
 
-        .loading-spinner.active {
+        .success-modal.active {
+            display: flex;
+        }
+
+        .success-content {
+            background: white;
+            border-radius: 12px;
+            padding: 40px;
+            max-width: 600px;
+            max-height: 80vh;
+            overflow-y: auto;
+            text-align: center;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .success-icon {
+            font-size: 4rem;
+            color: var(--success-color);
+            margin-bottom: 20px;
+        }
+
+        .success-content h2 {
+            color: var(--text-color);
+            margin-bottom: 15px;
+        }
+
+        .success-content p {
+            color: #666;
+            margin-bottom: 10px;
+            line-height: 1.6;
+        }
+
+        .confirmation-details {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            text-align: left;
+        }
+
+        .confirmation-details p {
+            margin: 8px 0;
+            font-size: 0.9rem;
+        }
+
+        .confirmation-details strong {
+            color: var(--text-color);
+        }
+
+        .response-copy-section {
+            background: #fff;
+            border: 2px solid var(--border-color);
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            text-align: left;
+        }
+
+        .response-copy-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .response-copy-header h4 {
+            color: var(--text-color);
+            font-size: 1rem;
+        }
+
+        .copy-response-btn {
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.3s;
+        }
+
+        .copy-response-btn:hover {
+            background: var(--primary-dark);
+        }
+
+        .copy-response-btn.copied {
+            background: var(--success-color);
+        }
+
+        .response-content {
+            font-size: 0.9rem;
+            line-height: 1.6;
+            color: #444;
+        }
+
+        .response-content h3 {
+            font-size: 1.1rem;
+            color: var(--text-color);
+            margin-top: 15px;
+            margin-bottom: 10px;
+        }
+
+        .response-content p {
+            margin: 8px 0;
+        }
+
+        .close-modal-btn {
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 600;
+            margin-top: 10px;
+        }
+
+        .loading-state {
+            display: none;
+            text-align: center;
+            padding: 60px;
+        }
+
+        .loading-state.active {
             display: block;
         }
 
         .spinner {
-            width: 40px;
-            height: 40px;
+            width: 50px;
+            height: 50px;
             border: 4px solid #f3f3f3;
             border-top: 4px solid var(--primary-color);
             border-radius: 50%;
@@ -174,89 +456,72 @@
             100% { transform: rotate(360deg); }
         }
 
-        .success-message {
-            display: none;
-            text-align: center;
-            padding: 60px 40px;
-        }
-
-        .success-message.active {
-            display: block;
-        }
-
-        .success-message i {
-            font-size: 4rem;
-            color: var(--success-color);
-            margin-bottom: 20px;
-        }
-
-        .success-message h2 {
-            color: var(--text-color);
-            margin-bottom: 10px;
-        }
-
-        .success-message p {
-            color: #666;
-        }
-
         .error-message {
             background: #f8d7da;
             color: #721c24;
-            padding: 12px;
-            border-radius: 8px;
+            padding: 15px;
+            border-radius: 4px;
             margin-bottom: 20px;
-            display: none;
-            font-size: 0.9rem;
-        }
-
-        .error-message.active {
-            display: block;
-        }
-
-        .spots-remaining {
-            background: #d1ecf1;
-            color: #0c5460;
-            padding: 12px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            text-align: center;
-            font-weight: 600;
-            font-size: 0.95rem;
+            border-left: 4px solid #dc3545;
         }
 
         @media (max-width: 768px) {
-            .registration-header,
+            .form-header,
             .event-info,
-            .registration-form {
+            .form-content,
+            .auth-required {
                 padding-left: 25px;
                 padding-right: 25px;
             }
 
-            .registration-header h1 {
+            .form-header h1 {
                 font-size: 1.5rem;
             }
 
-            .event-info h2 {
-                font-size: 1.1rem;
+            .success-content {
+                margin: 20px;
+                padding: 30px 20px;
             }
         }
     </style>
 </head>
 <body>
     <div class="registration-container">
-        <div class="registration-header">
-            <h1>Event Registration</h1>
-            <p>Fill in your details to register</p>
+        <!-- Banner (if exists) -->
+        <div id="registrationBanner" style="display: none;">
+            <img id="bannerImage" style="width: 100%; height: 250px; object-fit: cover; display: block;" alt="Event Banner">
         </div>
 
-        <div id="loading" class="loading-spinner">
+        <div class="form-header" id="formHeader">
+            <h1 id="eventName">Event Registration</h1>
+            <p id="eventDescription">Fill in the form to register for this event</p>
+        </div>
+
+        <div id="authRequired" class="auth-required">
+            <i class="fas fa-lock"></i>
+            <div class="auth-required-text">
+                <h3>Sign in Required</h3>
+                <p>You must be signed in with Google to register for this event</p>
+            </div>
+            <button class="google-signin-btn" onclick="signInWithGoogle()">
+                <svg viewBox="0 0 24 24" width="20" height="20">
+                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                </svg>
+                Sign in with Google
+            </button>
+        </div>
+
+        <div id="loadingState" class="loading-state">
             <div class="spinner"></div>
-            <p style="color: #666;">Loading event details...</p>
+            <p>Loading registration form...</p>
         </div>
 
-        <div id="eventContent" style="display: none;">
+        <div id="registrationContent" style="display: none;">
             <div class="event-info">
-                <h2 id="eventName">Event Name</h2>
+                <h2>Event Details</h2>
                 <div class="event-detail">
                     <i class="fas fa-calendar"></i>
                     <span id="eventDate">Date</span>
@@ -269,58 +534,124 @@
                     <i class="fas fa-rupee-sign"></i>
                     <span id="eventCost">Cost</span>
                 </div>
+                <div class="event-detail">
+                    <i class="fas fa-users"></i>
+                    <span id="spotsRemaining">Spots remaining</span>
+                </div>
             </div>
 
-            <form id="registrationForm" class="registration-form">
-                <div id="spotsRemaining" class="spots-remaining"></div>
-                <div id="errorMessage" class="error-message"></div>
+            <form id="registrationForm" class="form-content">
+                <div class="form-section">
+                    <h3 class="section-title">Personal Information</h3>
+                    <p class="section-description">Basic information about you</p>
 
-                <div class="form-group">
-                    <label for="fullName">Full Name *</label>
-                    <input type="text" id="fullName" required>
+                    <div class="pre-filled-notice">
+                        <i class="fas fa-info-circle"></i>
+                        <span>Some fields are pre-filled from your Google account</span>
+                    </div>
+
+                    <div class="form-question">
+                        <label class="question-label">
+                            Full Name
+                            <span class="required-indicator">*</span>
+                        </label>
+                        <input type="text" id="fullName" class="form-input" required disabled>
+                    </div>
+
+                    <div class="form-question">
+                        <label class="question-label">
+                            Email Address
+                            <span class="required-indicator">*</span>
+                        </label>
+                        <input type="email" id="email" class="form-input" required disabled>
+                    </div>
+
+                    <div class="form-question">
+                        <label class="question-label">
+                            Phone Number
+                            <span class="required-indicator">*</span>
+                        </label>
+                        <input type="tel" id="phone" class="form-input" placeholder="+91 1234567890" required>
+                        <p class="question-helper">Enter your 10-digit mobile number</p>
+                    </div>
                 </div>
 
-                <div class="form-group">
-                    <label for="email">Email Address *</label>
-                    <input type="email" id="email" required>
+                <div class="form-section" id="teamSection">
+                    <h3 class="section-title">Team Information</h3>
+                    <p class="section-description">Details about your team</p>
+
+                    <div class="form-question">
+                        <label class="question-label">
+                            Team Name
+                            <span class="required-indicator">*</span>
+                        </label>
+                        <input type="text" id="teamName" class="form-input" placeholder="Enter your team name" required>
+                    </div>
+
+                    <div id="teamMembersContainer"></div>
                 </div>
 
-                <div class="form-group">
-                    <label for="phone">Phone Number *</label>
-                    <input type="tel" id="phone" required>
+                <div id="customQuestionsContainer"></div>
+
+                <div class="form-section">
+                    <h3 class="section-title">Additional Information</h3>
+                    <p class="section-description">Any other details you'd like to share</p>
+
+                    <div class="form-question">
+                        <label class="question-label">Comments or Special Requirements</label>
+                        <textarea id="additionalInfo" class="form-textarea" placeholder="Enter any special requirements, dietary restrictions, or other information..."></textarea>
+                    </div>
                 </div>
 
-                <div class="form-group">
-                    <label for="teamName">Team Name</label>
-                    <input type="text" id="teamName">
-                </div>
+                <div id="errorContainer"></div>
 
-                <div class="form-group">
-                    <label for="additionalInfo">Additional Information</label>
-                    <textarea id="additionalInfo" placeholder="Any special requirements or information..."></textarea>
+                <div class="submit-section">
+                    <button type="submit" class="submit-btn">
+                        <i class="fas fa-paper-plane"></i>
+                        Submit Registration
+                    </button>
                 </div>
-
-                <button type="submit" class="submit-btn">
-                    <i class="fas fa-check-circle"></i> Register Now
-                </button>
             </form>
+        </div>
+    </div>
 
-            <div id="successMessage" class="success-message">
-                <i class="fas fa-check-circle"></i>
-                <h2>Registration Successful!</h2>
-                <p>Thank you for registering. You will receive a confirmation email shortly.</p>
+    <div id="successModal" class="success-modal">
+        <div class="success-content">
+            <i class="fas fa-check-circle success-icon"></i>
+            <h2>Registration Successful!</h2>
+            <p id="confirmationMessage">Thank you for registering for the event.</p>
+            
+            <div class="confirmation-details" id="confirmationDetails"></div>
+            
+            <div class="response-copy-section" id="responseCopySection">
+                <div class="response-copy-header">
+                    <h4>Your Registration Summary</h4>
+                    <button class="copy-response-btn" onclick="copyResponse()">
+                        <i class="fas fa-copy"></i>
+                        <span id="copyBtnText">Copy</span>
+                    </button>
+                </div>
+                <div class="response-content" id="responseContent"></div>
             </div>
+            
+            <p style="font-size: 0.9rem; color: #666; margin-top: 15px;">
+                A confirmation email has been sent to your registered email address.
+            </p>
+            
+            <button class="close-modal-btn" onclick="closeSuccessModal()">Close</button>
         </div>
     </div>
 
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     <script>
+        // Firebase Configuration
         const firebaseConfig = {
             apiKey: "AIzaSyCKd_iH-McAMrKI_0YDoYG0xjn2KrQpTOQ",
             authDomain: "notifyme-events.firebaseapp.com",
             projectId: "notifyme-events",
-            storageBucket: "notifyme-events.firebasestorage.app",
+            storageBucket: "notifyme-events.appspot.com",
             messagingSenderId: "761571632545",
             appId: "1:761571632545:web:547a7210fdebf366df97e0",
             measurementId: "G-309BJ6P79V"
@@ -330,17 +661,58 @@
             firebase.initializeApp(firebaseConfig);
         }
 
+        const auth = firebase.auth();
         const db = firebase.firestore();
         const eventId = new URLSearchParams(window.location.search).get('eventId');
+
+        let currentEvent = null;
+        let currentUser = null;
+        let userProfile = null;
 
         if (!eventId) {
             alert('Invalid registration link');
             window.location.href = '/';
         }
 
-        let currentEvent = null;
+        // Authentication state handler
+        auth.onAuthStateChanged(async (user) => {
+            if (user) {
+                currentUser = user;
+                document.getElementById('authRequired').style.display = 'none';
+                document.getElementById('loadingState').classList.add('active');
+                await loadUserProfile();
+                await loadEventAndForm();
+            } else {
+                document.getElementById('authRequired').style.display = 'flex';
+                document.getElementById('registrationContent').style.display = 'none';
+            }
+        });
 
-        async function loadEventDetails() {
+        // Sign in with Google
+        window.signInWithGoogle = async function() {
+            const provider = new firebase.auth.GoogleAuthProvider();
+            try {
+                await auth.signInWithPopup(provider);
+            } catch (error) {
+                console.error('Error signing in:', error);
+                alert('Error signing in with Google. Please try again.');
+            }
+        };
+
+        // Load user profile from Firestore
+        async function loadUserProfile() {
+            try {
+                const userDoc = await db.collection('users').doc(currentUser.uid).get();
+                if (userDoc.exists) {
+                    userProfile = userDoc.data();
+                }
+            } catch (error) {
+                console.error('Error loading user profile:', error);
+            }
+        }
+
+        // Load event and form
+        async function loadEventAndForm() {
             try {
                 const eventDoc = await db.collection('events').doc(eventId).get();
                 
@@ -350,19 +722,33 @@
                 }
 
                 currentEvent = { id: eventDoc.id, ...eventDoc.data() };
-                displayEventDetails(currentEvent);
                 
-                document.getElementById('loading').classList.remove('active');
-                document.getElementById('eventContent').style.display = 'block';
+                // Check if user is already registered
+                const participants = currentEvent.participants || [];
+                if (participants.some(p => p.uid === currentUser.uid)) {
+                    showError('You are already registered for this event');
+                    setTimeout(() => window.location.href = 'dashboard.html', 2000);
+                    return;
+                }
+
+                displayEventDetails(currentEvent);
+                prefillUserData();
+                buildCustomQuestions(currentEvent.customQuestions || []);
+                buildTeamMemberFields(currentEvent.teamSize || 1);
+                
+                document.getElementById('loadingState').classList.remove('active');
+                document.getElementById('registrationContent').style.display = 'block';
             } catch (error) {
                 console.error('Error loading event:', error);
                 showError('Error loading event details');
             }
         }
 
+        // Display event details
         function displayEventDetails(event) {
             document.getElementById('eventName').textContent = event.name;
-            document.getElementById('eventDate').textContent = new Date(event.date).toLocaleString();
+            document.getElementById('eventDescription').textContent = event.description || 'Fill in the form to register for this event';
+            document.getElementById('eventDate').textContent = new Date(event.date).toLocaleString('en-IN');
             document.getElementById('eventLocation').textContent = event.location;
             document.getElementById('eventCost').textContent = `₹${event.cost} per team`;
 
@@ -370,27 +756,120 @@
             const currentParticipants = (event.participants || []).length;
             const spotsLeft = maxParticipants - currentParticipants;
 
-            document.getElementById('spotsRemaining').textContent = 
-                `${spotsLeft} spots remaining out of ${maxParticipants}`;
+            document.getElementById('spotsRemaining').textContent = `${spotsLeft} spots remaining`;
+        }
 
-            if (spotsLeft <= 0) {
-                document.getElementById('registrationForm').innerHTML = 
-                    '<p style="text-align: center; color: #dc3545; font-weight: 600;">This event is full</p>';
+        // Prefill user data
+        function prefillUserData() {
+            document.getElementById('fullName').value = currentUser.displayName || '';
+            document.getElementById('email').value = currentUser.email || '';
+            
+            // Pre-fill phone if available from user profile
+            if (userProfile && userProfile.phone) {
+                document.getElementById('phone').value = userProfile.phone;
             }
         }
 
-        function showError(message) {
-            const errorDiv = document.getElementById('errorMessage');
-            errorDiv.textContent = message;
-            errorDiv.classList.add('active');
+        // Build team member fields
+        function buildTeamMemberFields(teamSize) {
+            const container = document.getElementById('teamMembersContainer');
+            container.innerHTML = '';
+
+            if (teamSize > 1) {
+                for (let i = 2; i <= teamSize; i++) {
+                    const memberDiv = document.createElement('div');
+                    memberDiv.className = 'form-question';
+                    memberDiv.innerHTML = `
+                        <label class="question-label">
+                            Team Member ${i} Name
+                            <span class="required-indicator">*</span>
+                        </label>
+                        <input type="text" id="teamMember${i}" class="form-input" placeholder="Enter team member name" required>
+                    `;
+                    container.appendChild(memberDiv);
+                }
+            } else {
+                document.getElementById('teamSection').style.display = 'none';
+            }
         }
 
+        // Build custom questions
+        function buildCustomQuestions(questions) {
+            const container = document.getElementById('customQuestionsContainer');
+            container.innerHTML = '';
+
+            if (questions.length === 0) return;
+
+            const section = document.createElement('div');
+            section.className = 'form-section';
+            section.innerHTML = `
+                <h3 class="section-title">Additional Questions</h3>
+                <p class="section-description">Please answer the following questions</p>
+            `;
+
+            questions.forEach((q, index) => {
+                const questionDiv = document.createElement('div');
+                questionDiv.className = 'form-question';
+
+                let inputHTML = '';
+                
+                switch(q.type) {
+                    case 'text':
+                        inputHTML = `<input type="text" id="custom${index}" class="form-input" placeholder="${q.placeholder || ''}" ${q.required ? 'required' : ''}>`;
+                        break;
+                    case 'textarea':
+                        inputHTML = `<textarea id="custom${index}" class="form-textarea" placeholder="${q.placeholder || ''}" ${q.required ? 'required' : ''}></textarea>`;
+                        break;
+                    case 'radio':
+                        inputHTML = `<div class="radio-group">
+                            ${q.options.map((opt, i) => `
+                                <label class="radio-option">
+                                    <input type="radio" name="custom${index}" value="${opt}" ${q.required ? 'required' : ''}>
+                                    ${opt}
+                                </label>
+                            `).join('')}
+                        </div>`;
+                        break;
+                    case 'checkbox':
+                        inputHTML = `<div class="checkbox-group">
+                            ${q.options.map((opt, i) => `
+                                <label class="checkbox-option">
+                                    <input type="checkbox" name="custom${index}" value="${opt}">
+                                    ${opt}
+                                </label>
+                            `).join('')}
+                        </div>`;
+                        break;
+                    case 'select':
+                        inputHTML = `<select id="custom${index}" class="form-select" ${q.required ? 'required' : ''}>
+                            <option value="">Select an option</option>
+                            ${q.options.map(opt => `<option value="${opt}">${opt}</option>`).join('')}
+                        </select>`;
+                        break;
+                }
+
+                questionDiv.innerHTML = `
+                    <label class="question-label">
+                        ${q.question}
+                        ${q.required ? '<span class="required-indicator">*</span>' : ''}
+                    </label>
+                    ${inputHTML}
+                    ${q.helperText ? `<p class="question-helper">${q.helperText}</p>` : ''}
+                `;
+
+                section.appendChild(questionDiv);
+            });
+
+            container.appendChild(section);
+        }
+
+        // Form submission handler
         document.getElementById('registrationForm').addEventListener('submit', async (e) => {
             e.preventDefault();
 
             const submitBtn = e.target.querySelector('.submit-btn');
             submitBtn.disabled = true;
-            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Registering...';
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Submitting...';
 
             try {
                 const eventRef = db.collection('events').doc(eventId);
@@ -398,48 +877,245 @@
                 const event = eventDoc.data();
                 const participants = event.participants || [];
 
-                const email = document.getElementById('email').value;
-                
-                if (participants.some(p => p.email === email)) {
-                    showError('This email is already registered for this event');
-                    submitBtn.disabled = false;
-                    submitBtn.innerHTML = '<i class="fas fa-check-circle"></i> Register Now';
-                    return;
-                }
-
+                // Check availability
                 const maxParticipants = event.teamSize * (event.maxTeams || 10);
                 if (participants.length >= maxParticipants) {
-                    showError('Event is full');
+                    showError('Sorry, this event is now full');
                     submitBtn.disabled = false;
-                    submitBtn.innerHTML = '<i class="fas fa-check-circle"></i> Register Now';
+                    submitBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Submit Registration';
                     return;
                 }
 
+                // Collect team members
+                const teamMembers = [currentUser.displayName];
+                const teamSize = event.teamSize || 1;
+                for (let i = 2; i <= teamSize; i++) {
+                    const memberInput = document.getElementById(`teamMember${i}`);
+                    if (memberInput && memberInput.value.trim()) {
+                        teamMembers.push(memberInput.value.trim());
+                    }
+                }
+
+                // Collect custom answers
+                const customAnswers = {};
+                const customQuestions = event.customQuestions || [];
+                customQuestions.forEach((q, index) => {
+                    const input = document.getElementById(`custom${index}`);
+                    if (input) {
+                        if (q.type === 'checkbox') {
+                            const checkboxes = document.querySelectorAll(`input[name="custom${index}"]:checked`);
+                            customAnswers[q.question] = Array.from(checkboxes).map(cb => cb.value);
+                        } else if (q.type === 'radio') {
+                            const radio = document.querySelector(`input[name="custom${index}"]:checked`);
+                            customAnswers[q.question] = radio ? radio.value : '';
+                        } else {
+                            customAnswers[q.question] = input.value;
+                        }
+                    }
+                });
+
                 const newParticipant = {
+                    uid: currentUser.uid,
                     name: document.getElementById('fullName').value,
-                    email: email,
+                    email: document.getElementById('email').value,
                     phone: document.getElementById('phone').value,
-                    teamName: document.getElementById('teamName').value || 'N/A',
+                    teamName: document.getElementById('teamName')?.value || 'N/A',
+                    teamMembers: teamMembers,
                     additionalInfo: document.getElementById('additionalInfo').value || '',
+                    customAnswers: customAnswers,
                     registeredAt: new Date().toISOString(),
-                    photoURL: `https://ui-avatars.com/api/?name=${encodeURIComponent(document.getElementById('fullName').value)}`
+                    photoURL: currentUser.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(currentUser.displayName)}`
                 };
 
-                participants.push(newParticipant);
-                await eventRef.update({ participants });
+                await eventRef.update({
+                    participants: firebase.firestore.FieldValue.arrayUnion(newParticipant)
+                });
 
-                document.getElementById('registrationForm').style.display = 'none';
-                document.getElementById('successMessage').classList.add('active');
+                // Show success modal
+                showSuccessModal(event, newParticipant);
 
             } catch (error) {
                 console.error('Error registering:', error);
                 showError('Registration failed. Please try again.');
                 submitBtn.disabled = false;
-                submitBtn.innerHTML = '<i class="fas fa-check-circle"></i> Register Now';
+                submitBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Submit Registration';
             }
         });
 
-        loadEventDetails();
+        // Generate response template
+        function generateResponseTemplate(event, participant) {
+            // Check if event has custom template
+            const template = event.responseTemplate || null;
+            
+            if (template && template.enabled) {
+                // Use custom template
+                return customizeTemplate(template, event, participant);
+            } else {
+                // Use default template
+                return generateDefaultTemplate(event, participant);
+            }
+        }
+
+        // Default response template
+        function generateDefaultTemplate(event, participant) {
+            let response = `🎉 Registration Confirmation\n\n`;
+            response += `Dear ${participant.name},\n\n`;
+            response += `Thank you for registering for ${event.name}!\n\n`;
+            
+            response += `📋 Registration Details:\n`;
+            response += `━━━━━━━━━━━━━━━━━━━━\n`;
+            response += `Event: ${event.name}\n`;
+            response += `Date: ${new Date(event.date).toLocaleString('en-IN', { 
+                weekday: 'long', 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            })}\n`;
+            response += `Location: ${event.location}\n`;
+            response += `Cost: ₹${event.cost}\n\n`;
+            
+            if (participant.teamName && participant.teamName !== 'N/A') {
+                response += `👥 Team Information:\n`;
+                response += `Team Name: ${participant.teamName}\n`;
+                response += `Team Members: ${participant.teamMembers.join(', ')}\n\n`;
+            }
+            
+            response += `📧 Contact Information:\n`;
+            response += `Email: ${participant.email}\n`;
+            response += `Phone: ${participant.phone}\n\n`;
+            
+            if (Object.keys(participant.customAnswers).length > 0) {
+                response += `📝 Your Responses:\n`;
+                response += `━━━━━━━━━━━━━━━━━━━━\n`;
+                for (const [question, answer] of Object.entries(participant.customAnswers)) {
+                    const answerText = Array.isArray(answer) ? answer.join(', ') : answer;
+                    response += `Q: ${question}\n`;
+                    response += `A: ${answerText}\n\n`;
+                }
+            }
+            
+            if (participant.additionalInfo) {
+                response += `💬 Additional Information:\n`;
+                response += `${participant.additionalInfo}\n\n`;
+            }
+            
+            response += `━━━━━━━━━━━━━━━━━━━━\n`;
+            response += `Registration ID: ${participant.uid.substring(0, 8).toUpperCase()}\n`;
+            response += `Registered on: ${new Date(participant.registeredAt).toLocaleString('en-IN')}\n\n`;
+            response += `We look forward to seeing you at the event!\n\n`;
+            response += `Best regards,\n`;
+            response += `GatherGenius Team`;
+            
+            return response;
+        }
+
+        // Customize template with dynamic values
+        function customizeTemplate(template, event, participant) {
+            let response = template.content || '';
+            
+            // Replace placeholders
+            response = response.replace(/\{eventName\}/g, event.name);
+            response = response.replace(/\{participantName\}/g, participant.name);
+            response = response.replace(/\{eventDate\}/g, new Date(event.date).toLocaleString('en-IN', { 
+                weekday: 'long', 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            }));
+            response = response.replace(/\{eventLocation\}/g, event.location);
+            response = response.replace(/\{eventCost\}/g, `₹${event.cost}`);
+            response = response.replace(/\{teamName\}/g, participant.teamName || 'N/A');
+            response = response.replace(/\{teamMembers\}/g, participant.teamMembers.join(', '));
+            response = response.replace(/\{email\}/g, participant.email);
+            response = response.replace(/\{phone\}/g, participant.phone);
+            response = response.replace(/\{registrationId\}/g, participant.uid.substring(0, 8).toUpperCase());
+            response = response.replace(/\{registrationDate\}/g, new Date(participant.registeredAt).toLocaleString('en-IN'));
+            
+            // Add custom answers if included
+            if (template.includeCustomAnswers && Object.keys(participant.customAnswers).length > 0) {
+                response += `\n\n📝 Your Responses:\n`;
+                response += `━━━━━━━━━━━━━━━━━━━━\n`;
+                for (const [question, answer] of Object.entries(participant.customAnswers)) {
+                    const answerText = Array.isArray(answer) ? answer.join(', ') : answer;
+                    response += `Q: ${question}\n`;
+                    response += `A: ${answerText}\n\n`;
+                }
+            }
+            
+            return response;
+        }
+
+        // Show success modal
+        function showSuccessModal(event, participant) {
+            const modal = document.getElementById('successModal');
+            const detailsDiv = document.getElementById('confirmationDetails');
+            const responseDiv = document.getElementById('responseContent');
+            
+            // Confirmation message
+            const confirmationMessage = event.confirmationMessage || 
+                'Thank you for registering! We look forward to seeing you at the event.';
+            
+            document.getElementById('confirmationMessage').textContent = confirmationMessage;
+            
+            // Build confirmation details
+            let detailsHTML = `
+                <p><strong>Event:</strong> ${event.name}</p>
+                <p><strong>Date:</strong> ${new Date(event.date).toLocaleString('en-IN')}</p>
+                <p><strong>Location:</strong> ${event.location}</p>
+                <p><strong>Your Name:</strong> ${participant.name}</p>
+                <p><strong>Email:</strong> ${participant.email}</p>
+            `;
+            
+            if (participant.teamName && participant.teamName !== 'N/A') {
+                detailsHTML += `<p><strong>Team Name:</strong> ${participant.teamName}</p>`;
+            }
+            
+            if (participant.teamMembers && participant.teamMembers.length > 1) {
+                detailsHTML += `<p><strong>Team Members:</strong> ${participant.teamMembers.join(', ')}</p>`;
+            }
+            
+            detailsDiv.innerHTML = detailsHTML;
+            
+            // Generate and display response template
+            const responseTemplate = generateResponseTemplate(event, participant);
+            responseDiv.innerHTML = `<pre style="white-space: pre-wrap; font-family: inherit;">${responseTemplate}</pre>`;
+            
+            modal.classList.add('active');
+        }
+
+        // Copy response to clipboard
+        window.copyResponse = function() {
+            const responseContent = document.getElementById('responseContent').textContent;
+            const copyBtn = document.querySelector('.copy-response-btn');
+            const copyBtnText = document.getElementById('copyBtnText');
+            
+            navigator.clipboard.writeText(responseContent).then(() => {
+                copyBtn.classList.add('copied');
+                copyBtnText.textContent = 'Copied!';
+                
+                setTimeout(() => {
+                    copyBtn.classList.remove('copied');
+                    copyBtnText.textContent = 'Copy';
+                }, 2000);
+            }).catch(err => {
+                console.error('Failed to copy:', err);
+                alert('Failed to copy to clipboard');
+            });
+        };
+
+        // Close success modal
+        function closeSuccessModal() {
+            window.location.href = 'dashboard.html';
+        }
+
+        // Show error message
+        function showError(message) {
+            const container = document.getElementById('errorContainer');
+            container.innerHTML = `<div class="error-message"><i class="fas fa-exclamation-triangle"></i> ${message}</div>`;
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
     </script>
-</body>
-</html>

@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
@@ -11,6 +12,7 @@
     <!-- SheetJS for Excel export -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
+
 <body>
     <div class="dashboard-container">
         <!-- Sidebar -->
@@ -58,9 +60,11 @@
                     </button>
                     <h1>Event Details</h1>
                 </div>
+                <!-- Replace the organizer-actions section in event-details.html -->
+
                 <div class="event-actions" id="organizer-actions" style="display: none;">
                     <button class="btn-secondary" onclick="window.exportEvent()">
-                        <i class="fas fa-edit"></i> Export Event
+                        <i class="fas fa-download"></i> Export Event
                     </button>
                     <button class="btn-secondary" onclick="editRegistrationForm()">
                         <i class="fas fa-edit"></i> Edit Registration
@@ -130,7 +134,7 @@
 
                 <div class="event-details-section" id="participants-section" style="display: none;">
                     <h3>Participants</h3>
-                    <button class="btn-primary" onclick="downloadParticipants()" >
+                    <button class="btn-primary" onclick="downloadParticipants()">
                         <i class="fas fa-download"></i> Download Participants
                     </button>
                     <div class="participants-list" id="participants-list">
@@ -211,4 +215,5 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     <script src="event-details.js"></script>
 </body>
+
 </html>

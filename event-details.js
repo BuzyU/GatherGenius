@@ -497,19 +497,32 @@ window.registerForEvent = async function() {
     }
 };
 
+// Add this function to event-details.js or replace the existing one
+
+// Edit Registration Form - Navigate to form builder
 window.editRegistrationForm = function() {
     if (!currentUser || !currentEvent || currentEvent.createdBy !== currentUser.uid) {
         showError('Only the event organizer can edit the registration form');
         return;
     }
-    window.location.href = `registration.html?id=${eventId}`;
+    // Navigate to the form builder page with the event ID
+    window.location.href = `registration-form-builder.html?id=${eventId}`;
 };
 
+// Export Event as JSON
 window.exportEvent = function() {
-    if (!currentEvent) return;
+    if (!currentUser || !currentEvent || currentEvent.createdBy !== currentUser.uid) {
+        showError('Only the event organizer can export event data');
+        return;
+    }
     
     const exportData = {
-        event: currentEvent,
+        event: {
+            ...currentEvent,
+            // Remove Firestore timestamps that can't be serialized
+            createdAt: currentEvent.createdAt?.toDate?.() ? currentEvent.createdAt.toDate().toISOString() : currentEvent.createdAt,
+            lastUpdated: currentEvent.lastUpdated?.toDate?.() ? currentEvent.lastUpdated.toDate().toISOString() : currentEvent.lastUpdated
+        },
         exportedAt: new Date().toISOString(),
         exportedBy: currentUser.email
     };
@@ -520,13 +533,143 @@ window.exportEvent = function() {
     
     const link = document.createElement('a');
     link.href = url;
-    link.download = `${currentEvent.name.replace(/[^a-z0-9]/gi, '_')}_export.json`;
+    const sanitizedName = currentEvent.name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+    link.download = `${sanitizedName}_export_${new Date().toISOString().slice(0, 10)}.json`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
     
     showSuccess('Event exported successfully!');
+};
+
+// Download Participants with Custom Questions
+window.downloadParticipants = function() {
+    if (!currentUser || !currentEvent || currentEvent.createdBy !== currentUser.uid) {
+        showError('Only the event organizer can download participant data');
+        return;
+    }
+
+    const participants = currentEvent.participants || [];
+    
+    if (participants.length === 0) {
+        showError('No participants to download');
+        return;
+    }
+
+    try {
+        // Prepare data for Excel including custom answers
+        const excelData = participants.map((participant, index) => {
+            const baseData = {
+                'S.No': index + 1,
+                'Name': participant.name || 'N/A',
+                'Email': participant.email || 'N/A',
+                'Phone': participant.phone || 'N/A',
+                'Team Name': participant.teamName || 'N/A',
+                'Team Members': participant.teamMembers ? participant.teamMembers.join(', ') : 'N/A',
+                'Registered On': participant.registeredAt ? 
+                    new Date(participant.registeredAt).toLocaleDateString('en-IN') : 'N/A',
+                'Time': participant.registeredAt ? 
+                    new Date(participant.registeredAt).toLocaleTimeString('en-IN') : 'N/A',
+                'Additional Info': participant.additionalInfo || 'N/A'
+            };
+
+            // Add custom question answers
+            if (participant.customAnswers) {
+                Object.keys(participant.customAnswers).forEach(question => {
+                    const answer = participant.customAnswers[question];
+                    baseData[question] = Array.isArray(answer) ? answer.join(', ') : answer;
+                });
+            }
+
+            return baseData;
+        });
+
+        // Create worksheet
+        const worksheet = XLSX.utils.json_to_sheet(excelData);
+        
+        // Auto-size columns
+        const maxWidth = 50;
+        const colWidths = Object.keys(excelData[0] || {}).map(key => {
+            const maxLen = Math.max(
+                key.length,
+                ...excelData.map(row => String(row[key] || '').length)
+            );
+            return { wch: Math.min(maxLen + 2, maxWidth) };
+        });
+        worksheet['!cols'] = colWidths;
+
+        // Create workbook
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, 'Participants');
+
+        // Add event info sheet
+        const eventInfo = [
+            { 'Field': 'Event Name', 'Value': currentEvent.name },
+            { 'Field': 'Category', 'Value': currentEvent.category || 'N/A' },
+            { 'Field': 'Date', 'Value': new Date(currentEvent.date).toLocaleDateString('en-IN') },
+            { 'Field': 'Time', 'Value': new Date(currentEvent.date).toLocaleTimeString('en-IN') },
+            { 'Field': 'Location', 'Value': currentEvent.location },
+            { 'Field': 'Team Size', 'Value': currentEvent.teamSize },
+            { 'Field': 'Cost per Team', 'Value': `₹${currentEvent.cost}` },
+            { 'Field': 'Total Participants', 'Value': participants.length },
+            { 'Field': 'Total Revenue', 'Value': `₹${participants.length * (currentEvent.cost || 0)}` },
+            { 'Field': 'Downloaded On', 'Value': new Date().toLocaleString('en-IN') },
+            { 'Field': 'Downloaded By', 'Value': currentUser.email }
+        ];
+        const infoSheet = XLSX.utils.json_to_sheet(eventInfo);
+        infoSheet['!cols'] = [{ wch: 20 }, { wch: 40 }];
+        XLSX.utils.book_append_sheet(workbook, infoSheet, 'Event Info');
+
+        // Add summary statistics sheet if there are custom questions
+        if (currentEvent.customQuestions && currentEvent.customQuestions.length > 0) {
+            const summaryData = [
+                { 'Metric': 'Registration Summary', 'Count': '' }
+            ];
+            
+            currentEvent.customQuestions.forEach(question => {
+                if (question.type === 'radio' || question.type === 'checkbox' || question.type === 'select') {
+                    summaryData.push({ 'Metric': '', 'Count': '' });
+                    summaryData.push({ 'Metric': question.question, 'Count': '' });
+                    
+                    const answerCounts = {};
+                    participants.forEach(p => {
+                        if (p.customAnswers && p.customAnswers[question.question]) {
+                            const answer = p.customAnswers[question.question];
+                            if (Array.isArray(answer)) {
+                                answer.forEach(a => {
+                                    answerCounts[a] = (answerCounts[a] || 0) + 1;
+                                });
+                            } else {
+                                answerCounts[answer] = (answerCounts[answer] || 0) + 1;
+                            }
+                        }
+                    });
+                    
+                    Object.entries(answerCounts).forEach(([answer, count]) => {
+                        summaryData.push({ 'Metric': `  - ${answer}`, 'Count': count });
+                    });
+                }
+            });
+            
+            const summarySheet = XLSX.utils.json_to_sheet(summaryData);
+            summarySheet['!cols'] = [{ wch: 50 }, { wch: 15 }];
+            XLSX.utils.book_append_sheet(workbook, summarySheet, 'Summary');
+        }
+
+        // Generate filename
+        const sanitizedEventName = currentEvent.name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+        const timestamp = new Date().toISOString().slice(0, 10);
+        const filename = `${sanitizedEventName}_participants_${timestamp}.xlsx`;
+
+        // Download file
+        XLSX.writeFile(workbook, filename);
+        
+        showSuccess(`Downloaded ${participants.length} participants successfully!`);
+    } catch (error) {
+        console.error('Error downloading participants:', error);
+        showError('Error creating Excel file: ' + error.message);
+    }
 };
 
 // Show/hide loading state
