@@ -8,6 +8,9 @@
     <title>Settings - GatherGenius</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <!-- CRITICAL: Load theme manager FIRST to prevent flash -->
+    <script src="theme.js"></script>
 </head>
 <body>
     <div class="dashboard-container">
@@ -300,7 +303,7 @@
                                 Export Data
                             </button>
                         </div>
-                        <div class="setting-item" >
+                        <div class="setting-item">
                             <div class="setting-info">
                                 <h3>Clear Cache</h3>
                                 <p>Clear stored application data</p>
@@ -379,6 +382,8 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    
+    <!-- Load settings.js AFTER Firebase -->
     <script src="settings.js"></script>
 </body>
 </html>

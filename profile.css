@@ -623,3 +623,107 @@
 .retry-btn:hover {
     background: var(--primary-dark);
 }
+
+/* ========================================
+   DARK THEME - Profile Page
+   ======================================== */
+[data-theme="dark"] {
+    --text-color: #e8eaed;
+    --background-color: #0f0f13;
+    --border-color: #2a2a35;
+    --surface-color: #1a1a23;
+}
+
+[data-theme="dark"] body {
+    background: var(--background-color);
+    color: var(--text-color);
+}
+
+[data-theme="dark"] .profile-content {
+    background: var(--background-color);
+}
+
+[data-theme="dark"] .profile-header {
+    background: linear-gradient(135deg, #1f1f2a 0%, #2a2a35 100%);
+}
+
+[data-theme="dark"] .profile-header h2,
+[data-theme="dark"] .profile-header p {
+    color: #e8eaed;
+}
+
+[data-theme="dark"] .profile-basic-info h2 {
+    color: #e8eaed;
+}
+
+[data-theme="dark"] .profile-avatar {
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="dark"] .profile-form-section {
+    background: var(--surface-color);
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+}
+
+[data-theme="dark"] .form-group label {
+    color: var(--text-color);
+}
+
+[data-theme="dark"] .form-group input,
+[data-theme="dark"] .form-group textarea,
+[data-theme="dark"] .form-group select {
+    background: #252530;
+    border-color: #3a3a45;
+    color: var(--text-color);
+}
+
+[data-theme="dark"] .form-group input::placeholder,
+[data-theme="dark"] .form-group textarea::placeholder {
+    color: #7a7d85;
+}
+
+[data-theme="dark"] .form-group input:focus,
+[data-theme="dark"] .form-group textarea:focus,
+[data-theme="dark"] .form-group select:focus {
+    border-color: #ff6600;
+    box-shadow: 0 0 0 3px rgba(255, 102, 0, 0.15);
+    background: #2a2a32;
+}
+
+[data-theme="dark"] .activity-section {
+    background: var(--surface-color);
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+}
+
+[data-theme="dark"] .activity-item {
+    background: #252530;
+    border-color: #3a3a45;
+}
+
+[data-theme="dark"] .activity-item:hover {
+    background: #2a2a32;
+}
+
+[data-theme="dark"] .activity-content h4 {
+    color: var(--text-color);
+}
+
+[data-theme="dark"] .activity-content p {
+    color: #b0b3b8;
+}
+
+[data-theme="dark"] .activity-time {
+    color: #7a7d85;
+}
+
+[data-theme="dark"] .session-item {
+    background: #252530;
+    border-color: #3a3a45;
+}
+
+[data-theme="dark"] .session-current {
+    background: rgba(40, 167, 69, 0.1);
+    border-color: rgba(40, 167, 69, 0.3);
+}

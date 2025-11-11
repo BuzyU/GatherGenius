@@ -1464,11 +1464,24 @@ body {
     }
 
     .user-menu-btn {
-        width: 100%;
-        justify-content: space-between;
-        padding: 10px;
-        background:none;
-        border-radius: 8px;
+        width: auto;
+        justify-content: center;
+        padding: 0;
+        background: transparent;
+        border-radius: 50%;
+        box-shadow: none;
+    }
+
+    .user-menu-btn .user-name {
+        display: none;
+    }
+
+    .user-menu-btn img,
+    .user-menu-btn .user-avatar {
+        width: 40px;
+        height: 40px;
+        box-shadow: none;
+        background: transparent;
     }
 
     /* Stats Grid Mobile */
@@ -1662,4 +1675,172 @@ body {
         break-inside: avoid;
         page-break-inside: avoid;
     }
+}
+
+/* ========================================
+   DARK THEME - Dashboard
+   ======================================== */
+[data-theme="dark"] {
+    --text-color: #e8eaed;
+    --text-secondary: #b0b3b8;
+    --background-color: #0f0f13;
+    --surface-color: #1a1a23;
+    --border-color: #2a2a35;
+}
+
+[data-theme="dark"] body {
+    background: var(--background-color);
+    color: var(--text-color);
+}
+
+[data-theme="dark"] .sidebar {
+    background: var(--surface-color);
+    border-right-color: var(--border-color);
+}
+
+[data-theme="dark"] .nav-item {
+    color: var(--text-secondary);
+}
+
+[data-theme="dark"] .nav-item:hover {
+    background: rgba(255, 102, 0, 0.15);
+    color: #ff6600;
+}
+
+[data-theme="dark"] .nav-item.active {
+    background: linear-gradient(135deg, #ff6600, #ff8533);
+    color: white;
+}
+
+[data-theme="dark"] .content-header {
+    background: var(--surface-color);
+    border-bottom: 1px solid var(--border-color);
+}
+
+[data-theme="dark"] .header-left h1 {
+    color: var(--text-color);
+}
+
+[data-theme="dark"] .search-box input {
+    background: #252530;
+    border-color: var(--border-color);
+    color: var(--text-color);
+}
+
+[data-theme="dark"] .search-box input::placeholder {
+    color: #7a7d85;
+}
+
+[data-theme="dark"] .search-box input:focus {
+    border-color: #ff6600;
+    box-shadow: 0 0 0 3px rgba(255, 102, 0, 0.15);
+}
+
+[data-theme="dark"] .stat-card {
+    background: var(--surface-color);
+    border: 1px solid var(--border-color);
+}
+
+[data-theme="dark"] .stat-card:hover {
+    background: #252530;
+    border-color: rgba(255, 102, 0, 0.3);
+}
+
+[data-theme="dark"] .stat-icon {
+    background: rgba(255, 102, 0, 0.1);
+    color: #ff6600;
+}
+
+[data-theme="dark"] .stat-info h3 {
+    color: var(--text-secondary);
+}
+
+[data-theme="dark"] .stat-info p {
+    color: var(--text-color);
+}
+
+[data-theme="dark"] .quick-actions {
+    background: var(--surface-color);
+    border: 1px solid var(--border-color);
+}
+
+[data-theme="dark"] .quick-actions h2 {
+    color: var(--text-color);
+}
+
+[data-theme="dark"] .action-card {
+    background: #252530;
+    border-color: var(--border-color);
+    color: var(--text-secondary);
+}
+
+[data-theme="dark"] .action-card:hover {
+    background: #ff6600;
+    border-color: #ff6600;
+    color: white;
+}
+
+[data-theme="dark"] .event-card {
+    background: var(--surface-color);
+    border: 1px solid var(--border-color);
+    border-left-color: rgba(255, 102, 0, 0.4);
+}
+
+[data-theme="dark"] .event-card:hover {
+    background: #252530;
+    border-left-color: #ff6600;
+}
+
+[data-theme="dark"] .event-title h3 {
+    color: var(--text-color);
+}
+
+[data-theme="dark"] .event-status {
+    background: transparent;
+}
+
+[data-theme="dark"] .event-status.upcoming {
+    background: rgba(23, 162, 184, 0.1);
+    color: #26c6da;
+}
+
+[data-theme="dark"] .event-status.in-progress {
+    background: rgba(255, 193, 7, 0.1);
+    color: #ffb300;
+}
+
+[data-theme="dark"] .event-status.completed {
+    background: rgba(40, 167, 69, 0.1);
+    color: #66bb6a;
+}
+
+[data-theme="dark"] .event-date {
+    color: var(--text-secondary);
+}
+
+[data-theme="dark"] .event-details p {
+    color: var(--text-secondary);
+}
+
+[data-theme="dark"] .event-description {
+    background: #252530;
+    color: var(--text-secondary);
+    border: 1px solid var(--border-color);
+}
+
+[data-theme="dark"] .modal-content {
+    background: var(--surface-color);
+    border: 1px solid var(--border-color);
+}
+
+[data-theme="dark"] .modal-header {
+    border-bottom-color: var(--border-color);
+}
+
+[data-theme="dark"] .modal-header h2 {
+    color: var(--text-color);
+}
+
+[data-theme="dark"] .modal-body {
+    color: var(--text-color);
 }

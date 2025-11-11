@@ -632,4 +632,104 @@
     justify-content: space-between;
     margin-top: 15px;
   }
+
+/* ========================================
+   DARK THEME - Event Details Page
+   ======================================== */
+[data-theme="dark"] {
+    --text-color: #e8eaed;
+    --background-color: #0f0f13;
+    --border-color: #2a2a35;
+    --surface-color: #1a1a23;
+}
+
+[data-theme="dark"] body {
+    background: var(--background-color);
+    color: var(--text-color);
+}
+
+[data-theme="dark"] .event-details-content {
+    background: var(--background-color);
+}
+
+[data-theme="dark"] .event-header h2 {
+    color: var(--text-color);
+}
+
+[data-theme="dark"] .event-status {
+    background: transparent;
+    border: 1px solid currentColor;
+}
+
+[data-theme="dark"] .event-status.upcoming {
+    background: rgba(23, 162, 184, 0.1);
+    color: #26c6da;
+    border: 1px solid rgba(23, 162, 184, 0.3);
+}
+
+[data-theme="dark"] .event-status.in-progress {
+    background: rgba(255, 193, 7, 0.1);
+    color: #ffb300;
+    border: 1px solid rgba(255, 193, 7, 0.3);
+}
+
+[data-theme="dark"] .event-status.completed {
+    background: rgba(40, 167, 69, 0.1);
+    color: #66bb6a;
+    border: 1px solid rgba(40, 167, 69, 0.3);
+}
+
+[data-theme="dark"] .event-details-section {
+    background: var(--surface-color);
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+}
+
+[data-theme="dark"] .info-card {
+    background: #252530;
+    border: 1px solid #3a3a45;
+}
+
+[data-theme="dark"] .info-content h3 {
+    color: #b0b3b8;
+}
+
+[data-theme="dark"] .info-content p {
+    color: var(--text-color);
+}
+
+[data-theme="dark"] .participant-card {
+    background: #252530;
+    border: 1px solid #3a3a45;
+}
+
+[data-theme="dark"] .participant-info h4 {
+    color: var(--text-color);
+}
+
+[data-theme="dark"] .participant-info p {
+    color: #b0b3b8;
+}
+
+[data-theme="dark"] .registration-status {
+    background: #252530;
+    border: 1px solid #3a3a45;
+}
+
+[data-theme="dark"] .organizer-info {
+    background: #252530;
+    border: 1px solid #3a3a45;
+}
+
+[data-theme="dark"] .url-copy-container input {
+    background: #1a1a23;
+    border-color: #3a3a45;
+    color: var(--text-color);
+}
+
+[data-theme="dark"] .modal-content {
+    background: var(--surface-color);
+    color: var(--text-color);
+    border: 1px solid #3a3a45;
+}
   

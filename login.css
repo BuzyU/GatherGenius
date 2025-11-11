@@ -260,3 +260,91 @@ h1 {
     transform: translateY(0);
     opacity: 1;
 }
+
+/* ========================================
+   DARK THEME - Login Page
+   ======================================== */
+[data-theme="dark"] body {
+    background: linear-gradient(135deg, rgba(255, 102, 0, 0.1) 0%, rgba(255, 136, 0, 0.08) 100%), #0f0f13;
+    background-size: cover;
+    background-position: center;
+}
+
+[data-theme="dark"] .container {
+    background: #1a1a23;
+    color: #e8eaed;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+
+[data-theme="dark"] h1 {
+    color: #e8eaed;
+}
+
+[data-theme="dark"] .subtitle {
+    color: #b0b3b8;
+}
+
+[data-theme="dark"] .social-signin {
+    background: #252530;
+    border-color: #3a3a45;
+    color: #e8eaed;
+}
+
+[data-theme="dark"] .social-signin:hover {
+    background: #2a2a32;
+    border-color: #ff6600;
+}
+
+[data-theme="dark"] .divider::before,
+[data-theme="dark"] .divider::after {
+    background: #3a3a45;
+}
+
+[data-theme="dark"] .divider span {
+    background: #1a1a23;
+    color: #b0b3b8;
+}
+
+[data-theme="dark"] .auth-form label {
+    color: #e8eaed;
+}
+
+[data-theme="dark"] .auth-form input {
+    background: #252530;
+    border-color: #3a3a45;
+    color: #e8eaed;
+}
+
+[data-theme="dark"] .auth-form input::placeholder {
+    color: #7a7d85;
+}
+
+[data-theme="dark"] .auth-form input:focus {
+    border-color: #ff6600;
+    box-shadow: 0 0 5px rgba(255, 102, 0, 0.3);
+}
+
+[data-theme="dark"] .form-actions {
+    color: #b0b3b8;
+}
+
+[data-theme="dark"] .forgot-password {
+    color: #ff6600;
+}
+
+[data-theme="dark"] .submit-btn {
+    background: linear-gradient(135deg, #ff6600, #ff8533);
+    color: white;
+}
+
+[data-theme="dark"] .submit-btn:hover {
+    background: linear-gradient(135deg, #e55b00, #ff6600);
+}
+
+[data-theme="dark"] .auth-footer {
+    color: #b0b3b8;
+}
+
+[data-theme="dark"] .auth-footer a {
+    color: #ff6600;
+}
