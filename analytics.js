@@ -62,15 +62,20 @@ const utils = {
         if (!timestamp) return null;
         if (timestamp.toDate) return timestamp.toDate();
         if (timestamp instanceof Date) return timestamp;
-        return new Date(timestamp);
+        if (typeof timestamp === 'string') return new Date(timestamp);
+        if (typeof timestamp === 'number') return new Date(timestamp);
+        return null;
     },
 
     formatDate: (date, format = 'short') => {
         if (!date) return '—';
+        const d = utils.getDateFromFirestore(date);
+        if (!d || isNaN(d.getTime())) return '—';
+        
         const options = format === 'short'
             ? { month: 'short', day: 'numeric', year: 'numeric' }
             : { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' };
-        return date.toLocaleString('en-US', options);
+        return d.toLocaleString('en-US', options);
     },
 
     formatCurrency: (amount) => {
@@ -86,13 +91,25 @@ const utils = {
     },
 
     getEventStatus: (event) => {
+        if (!event) return 'upcoming';
+        
+        // Check if explicitly marked as completed
+        if (event.status === 'completed') return 'completed';
+        
         const now = new Date();
         const eventDate = utils.getDateFromFirestore(event.eventDate);
 
-        if (!eventDate) return 'upcoming';
-        if (event.status === 'completed') return 'completed';
-        if (eventDate > now) return 'upcoming';
-        return 'in-progress';
+        if (!eventDate || isNaN(eventDate.getTime())) return 'upcoming';
+        
+        // Event is in the past
+        if (eventDate < now) {
+            // If more than 1 day in the past, consider completed
+            const daysDiff = (now - eventDate) / (1000 * 60 * 60 * 24);
+            if (daysDiff > 1) return 'completed';
+            return 'in-progress';
+        }
+        
+        return 'upcoming';
     },
 
     calculateTrend: (current, previous) => {
@@ -104,8 +121,8 @@ const utils = {
         return events.sort((a, b) => {
             const dateA = utils.getDateFromFirestore(a.createdAt);
             const dateB = utils.getDateFromFirestore(b.createdAt);
-            if (!dateA) return 1;
-            if (!dateB) return -1;
+            if (!dateA || isNaN(dateA.getTime())) return 1;
+            if (!dateB || isNaN(dateB.getTime())) return -1;
             return descending ? dateB - dateA : dateA - dateB;
         });
     }
@@ -141,7 +158,7 @@ function updateUserInterface(user) {
     }
 }
 
-// Data Loading - FIXED: Removed orderBy to avoid index requirement
+// Data Loading
 async function loadAnalyticsData() {
     if (state.isLoading) return;
 
@@ -149,21 +166,20 @@ async function loadAnalyticsData() {
         state.isLoading = true;
         showLoadingState();
 
-        // Simple query without orderBy to avoid index requirement
         const eventsSnapshot = await db.collection('events')
             .where('createdBy', '==', state.currentUser.uid)
             .get();
 
-
+        console.log('Loaded events:', eventsSnapshot.size);
 
         state.allEvents = [];
         eventsSnapshot.forEach(doc => {
-            state.allEvents.push({ id: doc.id, ...doc.data() });
+            const data = doc.data();
+            console.log('Event data:', data);
+            state.allEvents.push({ id: doc.id, ...data });
         });
 
-        // Sort in JavaScript instead
         state.allEvents = utils.sortEventsByDate(state.allEvents, true);
-
         applyFilters();
 
     } catch (error) {
@@ -175,29 +191,22 @@ async function loadAnalyticsData() {
     }
 }
 
-// FIXED: Better loading state handling
 function showLoadingState() {
-    // Update stat cards
-    document.querySelectorAll('.stat-card p').forEach(el => {
-        if (!el.classList.contains('stat-change')) {
-            el.innerHTML = '<span class="loading-shimmer">Loading</span>';
-        }
+    document.querySelectorAll('.stat-card p:not(.stat-change)').forEach(el => {
+        el.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
     });
 
-    // For charts - hide canvas and show loading
     const chartContainers = document.querySelectorAll('.chart-container');
     chartContainers.forEach(container => {
         const canvas = container.querySelector('canvas');
-        if (canvas) {
-            canvas.style.display = 'none';
-        }
+        if (canvas) canvas.style.display = 'none';
 
         let loadingDiv = container.querySelector('.chart-loading');
         if (!loadingDiv) {
             loadingDiv = document.createElement('div');
             loadingDiv.className = 'chart-loading';
             loadingDiv.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading chart...';
-            loadingDiv.style.cssText = 'display: flex; align-items: center; justify-content: center; min-height: 300px; color: #6c757d;';
+            loadingDiv.style.cssText = 'display: flex; align-items: center; justify-content: center; min-height: 300px; color: #6c757d; gap: 10px;';
             container.appendChild(loadingDiv);
         }
         loadingDiv.style.display = 'flex';
@@ -213,21 +222,21 @@ function showErrorState() {
         const loadingDiv = container.querySelector('.chart-loading');
         if (loadingDiv) loadingDiv.remove();
 
-        let errorDiv = container.querySelector('.chart-empty');
+        let errorDiv = container.querySelector('.chart-error');
         if (!errorDiv) {
             errorDiv = document.createElement('div');
-            errorDiv.className = 'chart-empty';
+            errorDiv.className = 'chart-error';
             errorDiv.innerHTML = `
                 <i class="fas fa-exclamation-triangle"></i>
                 <p>Error loading data</p>
             `;
-            errorDiv.style.cssText = 'display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 300px; color: #6c757d; text-align: center;';
+            errorDiv.style.cssText = 'display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 300px; color: #dc3545; text-align: center; gap: 10px;';
             container.appendChild(errorDiv);
         }
     });
 }
 
-// Real-time Updates - FIXED: Added sorting
+// Real-time Updates
 function setupRealtimeUpdates() {
     if (!state.currentUser) return;
 
@@ -241,14 +250,11 @@ function setupRealtimeUpdates() {
             (snapshot) => {
                 const newEvents = [];
                 snapshot.forEach(doc => newEvents.push({ id: doc.id, ...doc.data() }));
-
-                // Sort by createdAt descending
                 state.allEvents = utils.sortEventsByDate(newEvents, true);
                 applyFilters();
             },
             (error) => {
                 console.error('Realtime listener error:', error);
-                utils.showToast('Realtime update error: ' + error.message, 'error');
             }
         );
 }
@@ -264,15 +270,13 @@ function applyFilters() {
     const now = new Date();
     const filterDate = new Date(now.getTime() - (state.timeFilter * 24 * 60 * 60 * 1000));
 
-    // Apply time filter
     let filtered = state.timeFilter === 0
         ? [...state.allEvents]
         : state.allEvents.filter(event => {
             const eventDate = utils.getDateFromFirestore(event.createdAt);
-            return eventDate && eventDate >= filterDate;
+            return eventDate && !isNaN(eventDate.getTime()) && eventDate >= filterDate;
         });
 
-    // Apply search filter
     if (state.searchQuery) {
         filtered = filtered.filter(event => {
             const searchLower = state.searchQuery.toLowerCase();
@@ -282,7 +286,6 @@ function applyFilters() {
         });
     }
 
-    // Apply category filter
     if (state.categoryFilter && state.categoryFilter !== 'all') {
         filtered = filtered.filter(event =>
             (event.category || 'other').toLowerCase() === state.categoryFilter.toLowerCase()
@@ -290,6 +293,7 @@ function applyFilters() {
     }
 
     state.filteredEvents = filtered;
+    console.log('Filtered events:', state.filteredEvents.length);
     updateAllAnalytics();
 }
 
@@ -305,33 +309,50 @@ function updateAllAnalytics() {
 // Overview Statistics
 function updateOverviewStats() {
     const totalEvents = state.filteredEvents.length;
-    const totalParticipants = state.filteredEvents.reduce((sum, e) =>
-        sum + (e.currentParticipants || 0), 0
-    );
+    
+    // Get participant count - handle both currentParticipants and participants array
+    const totalParticipants = state.filteredEvents.reduce((sum, e) => {
+        const count = e.currentParticipants 
+            ? parseInt(e.currentParticipants) 
+            : (e.participants ? e.participants.length : 0);
+        return sum + count;
+    }, 0);
+    
     const avgParticipation = totalEvents > 0
         ? Math.round(totalParticipants / totalEvents)
         : 0;
-    const totalRevenue = state.filteredEvents.reduce((sum, e) =>
-        sum + ((e.cost || 0) * (e.currentParticipants || 0)), 0
-    );
+    
+    const totalRevenue = state.filteredEvents.reduce((sum, e) => {
+        const cost = parseFloat(e.cost) || 0;
+        const participants = e.currentParticipants 
+            ? parseInt(e.currentParticipants) 
+            : (e.participants ? e.participants.length : 0);
+        return sum + (cost * participants);
+    }, 0);
 
-    // Calculate previous period data for comparison
     const previousPeriodEvents = getPreviousPeriodData();
     const prevTotalEvents = previousPeriodEvents.length;
-    const prevTotalParticipants = previousPeriodEvents.reduce((sum, e) =>
-        sum + (e.currentParticipants || 0), 0
-    );
-    const prevTotalRevenue = previousPeriodEvents.reduce((sum, e) =>
-        sum + ((e.cost || 0) * (e.currentParticipants || 0)), 0
-    );
+    
+    const prevTotalParticipants = previousPeriodEvents.reduce((sum, e) => {
+        const count = e.currentParticipants 
+            ? parseInt(e.currentParticipants) 
+            : (e.participants ? e.participants.length : 0);
+        return sum + count;
+    }, 0);
+    
+    const prevTotalRevenue = previousPeriodEvents.reduce((sum, e) => {
+        const cost = parseFloat(e.cost) || 0;
+        const participants = e.currentParticipants 
+            ? parseInt(e.currentParticipants) 
+            : (e.participants ? e.participants.length : 0);
+        return sum + (cost * participants);
+    }, 0);
 
-    // Update stats
     updateStat('total-events-stat', totalEvents);
     updateStat('total-participants-stat', totalParticipants);
     updateStat('avg-participation-stat', avgParticipation);
     updateStat('total-revenue-stat', utils.formatCurrency(totalRevenue));
 
-    // Update changes
     updateChangeIndicator('events-change',
         utils.calculateTrend(totalEvents, prevTotalEvents));
     updateChangeIndicator('participants-change',
@@ -349,7 +370,8 @@ function getPreviousPeriodData() {
 
     return state.allEvents.filter(event => {
         const eventDate = utils.getDateFromFirestore(event.createdAt);
-        return eventDate && eventDate >= previousPeriodStart && eventDate < currentPeriodStart;
+        return eventDate && !isNaN(eventDate.getTime()) && 
+               eventDate >= previousPeriodStart && eventDate < currentPeriodStart;
     });
 }
 
@@ -357,7 +379,6 @@ function updateStat(elementId, value) {
     const element = document.getElementById(elementId);
     if (element) {
         element.textContent = value;
-        element.classList.remove('loading-shimmer');
     }
 }
 
@@ -370,14 +391,14 @@ function updateChangeIndicator(elementId, percentage) {
 
     if (percentage > 0) {
         className = 'stat-change positive';
-        icon = '<i class="fas fa-arrow-up"></i>';
+        icon = '<i class="fas fa-arrow-up"></i> ';
     } else if (percentage < 0) {
         className = 'stat-change negative';
-        icon = '<i class="fas fa-arrow-down"></i>';
+        icon = '<i class="fas fa-arrow-down"></i> ';
     }
 
     element.className = className;
-    element.innerHTML = `${icon} ${Math.abs(percentage)}% from previous period`;
+    element.innerHTML = `${icon}${Math.abs(percentage)}% from previous period`;
 }
 
 // Chart Updates
@@ -389,14 +410,23 @@ function updateCharts() {
     updateRevenueChart();
 }
 
-// FIXED: Better container handling
-function getChartContainer(canvas) {
+function prepareChartCanvas(canvasId) {
+    const canvas = document.getElementById(canvasId);
     if (!canvas) return null;
-    let container = canvas.closest('.chart-container');
-    if (!container) {
-        container = canvas.parentElement;
-    }
-    return container;
+
+    const container = canvas.closest('.chart-container') || canvas.parentElement;
+
+    const loadingDiv = container.querySelector('.chart-loading');
+    const emptyDiv = container.querySelector('.chart-empty');
+    const errorDiv = container.querySelector('.chart-error');
+    
+    if (loadingDiv) loadingDiv.remove();
+    if (emptyDiv) emptyDiv.remove();
+    if (errorDiv) errorDiv.remove();
+
+    canvas.style.display = 'block';
+
+    return { canvas, container };
 }
 
 function showEmptyChart(container, message) {
@@ -405,38 +435,17 @@ function showEmptyChart(container, message) {
     const canvas = container.querySelector('canvas');
     if (canvas) canvas.style.display = 'none';
 
-    const loadingDiv = container.querySelector('.chart-loading');
-    if (loadingDiv) loadingDiv.remove();
-
     let emptyDiv = container.querySelector('.chart-empty');
     if (!emptyDiv) {
         emptyDiv = document.createElement('div');
         emptyDiv.className = 'chart-empty';
-        emptyDiv.style.cssText = 'display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 300px; color: #6c757d; text-align: center;';
+        emptyDiv.style.cssText = 'display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 300px; color: #6c757d; text-align: center; gap: 10px;';
         container.appendChild(emptyDiv);
     }
     emptyDiv.innerHTML = `
-        <i class="fas fa-chart-line" style="font-size: 3rem; margin-bottom: 12px; opacity: 0.3;"></i>
+        <i class="fas fa-chart-line" style="font-size: 3rem; opacity: 0.3;"></i>
         <p style="margin: 0;">${message}</p>
     `;
-}
-
-function prepareChartCanvas(canvasId) {
-    const canvas = document.getElementById(canvasId);
-    if (!canvas) return null;
-
-    const container = getChartContainer(canvas);
-
-    // Remove loading/empty states
-    const loadingDiv = container?.querySelector('.chart-loading');
-    const emptyDiv = container?.querySelector('.chart-empty');
-    if (loadingDiv) loadingDiv.remove();
-    if (emptyDiv) emptyDiv.remove();
-
-    // Show canvas
-    canvas.style.display = 'block';
-
-    return { canvas, container };
 }
 
 function updateEventsTimelineChart() {
@@ -450,17 +459,22 @@ function updateEventsTimelineChart() {
         return;
     }
 
-    // Group events by date
     const eventsByDate = {};
     state.filteredEvents.forEach(event => {
         const date = utils.getDateFromFirestore(event.createdAt);
-        if (date) {
+        if (date && !isNaN(date.getTime())) {
             const dateKey = date.toISOString().split('T')[0];
             eventsByDate[dateKey] = (eventsByDate[dateKey] || 0) + 1;
         }
     });
 
     const sortedDates = Object.keys(eventsByDate).sort();
+    
+    if (sortedDates.length === 0) {
+        showEmptyChart(container, 'No date data available');
+        return;
+    }
+
     const labels = sortedDates.map(d => utils.formatDate(new Date(d)));
     const data = sortedDates.map(d => eventsByDate[d]);
 
@@ -491,9 +505,7 @@ function updateEventsTimelineChart() {
                 legend: { display: false },
                 tooltip: {
                     backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                    padding: 12,
-                    titleFont: { size: 14 },
-                    bodyFont: { size: 13 }
+                    padding: 12
                 }
             },
             scales: {
@@ -557,10 +569,6 @@ function updateCategoryChart() {
                 legend: {
                     position: 'bottom',
                     labels: { padding: 15, font: { size: 12 } }
-                },
-                tooltip: {
-                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                    padding: 12
                 }
             }
         }
@@ -580,15 +588,23 @@ function updateParticipationChart() {
 
     const participationByDate = {};
     state.filteredEvents.forEach(event => {
-        const date = utils.getDateFromFirestore(event.eventDate);
-        if (date) {
+        const date = utils.getDateFromFirestore(event.eventDate || event.date);
+        if (date && !isNaN(date.getTime())) {
             const dateKey = date.toISOString().split('T')[0];
-            participationByDate[dateKey] = (participationByDate[dateKey] || 0) +
-                (event.currentParticipants || 0);
+            const participants = event.currentParticipants 
+                ? parseInt(event.currentParticipants) 
+                : (event.participants ? event.participants.length : 0);
+            participationByDate[dateKey] = (participationByDate[dateKey] || 0) + participants;
         }
     });
 
     const sortedDates = Object.keys(participationByDate).sort();
+    
+    if (sortedDates.length === 0) {
+        showEmptyChart(container, 'No participation data available');
+        return;
+    }
+
     const labels = sortedDates.map(d => utils.formatDate(new Date(d)));
     const data = sortedDates.map(d => participationByDate[d]);
 
@@ -605,19 +621,14 @@ function updateParticipationChart() {
                 label: 'Participants',
                 data: data,
                 backgroundColor: '#28a745',
-                borderRadius: 8,
-                barThickness: 30
+                borderRadius: 8
             }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
-                legend: { display: false },
-                tooltip: {
-                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                    padding: 12
-                }
+                legend: { display: false }
             },
             scales: {
                 y: {
@@ -673,11 +684,7 @@ function updateStatusChart() {
             plugins: {
                 legend: {
                     position: 'bottom',
-                    labels: { padding: 15, font: { size: 12 } }
-                },
-                tooltip: {
-                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                    padding: 12
+                    labels: { padding: 15 }
                 }
             }
         }
@@ -697,15 +704,25 @@ function updateRevenueChart() {
 
     const revenueByMonth = {};
     state.filteredEvents.forEach(event => {
-        const date = utils.getDateFromFirestore(event.eventDate);
-        if (date) {
+        const date = utils.getDateFromFirestore(event.eventDate || event.date);
+        if (date && !isNaN(date.getTime())) {
             const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-            const revenue = (event.cost || 0) * (event.currentParticipants || 0);
+            const cost = parseFloat(event.cost) || 0;
+            const participants = event.currentParticipants 
+                ? parseInt(event.currentParticipants) 
+                : (event.participants ? event.participants.length : 0);
+            const revenue = cost * participants;
             revenueByMonth[monthKey] = (revenueByMonth[monthKey] || 0) + revenue;
         }
     });
 
     const sortedMonths = Object.keys(revenueByMonth).sort();
+    
+    if (sortedMonths.length === 0) {
+        showEmptyChart(container, 'No revenue data available');
+        return;
+    }
+
     const labels = sortedMonths.map(m => {
         const [year, month] = m.split('-');
         return new Date(year, month - 1).toLocaleDateString('en-US', {
@@ -741,12 +758,8 @@ function updateRevenueChart() {
             plugins: {
                 legend: { display: false },
                 tooltip: {
-                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                    padding: 12,
                     callbacks: {
-                        label: (context) => {
-                            return 'Revenue: ' + utils.formatCurrency(context.parsed.y);
-                        }
+                        label: (context) => 'Revenue: ' + utils.formatCurrency(context.parsed.y)
                     }
                 }
             },
@@ -766,7 +779,7 @@ function updateRevenueChart() {
     });
 }
 
-// Top Events Table - FIXED: Better empty state
+// Top Events Table
 function updateTopEventsTable() {
     const tbody = document.getElementById('topEventsTable');
     if (!tbody) return;
@@ -775,9 +788,9 @@ function updateTopEventsTable() {
         tbody.innerHTML = `
             <tr>
                 <td colspan="6" style="text-align: center; padding: 60px 20px; color: #6c757d;">
-                    <div style="display: flex; flex-direction: column; align-items: center;">
-                        <i class="fas fa-calendar-times" style="font-size: 3rem; margin-bottom: 16px; opacity: 0.3;"></i>
-                        <p style="margin: 0; font-size: 1.1rem;">No events to display</p>
+                    <div style="display: flex; flex-direction: column; align-items: center; gap: 10px;">
+                        <i class="fas fa-calendar-times" style="font-size: 3rem; opacity: 0.3;"></i>
+                        <p style="margin: 0;">No events to display</p>
                     </div>
                 </td>
             </tr>
@@ -786,25 +799,35 @@ function updateTopEventsTable() {
     }
 
     const sortedEvents = [...state.filteredEvents]
-        .sort((a, b) => (b.currentParticipants || 0) - (a.currentParticipants || 0))
+        .sort((a, b) => {
+            const aCount = a.currentParticipants 
+                ? parseInt(a.currentParticipants) 
+                : (a.participants ? a.participants.length : 0);
+            const bCount = b.currentParticipants 
+                ? parseInt(b.currentParticipants) 
+                : (b.participants ? b.participants.length : 0);
+            return bCount - aCount;
+        })
         .slice(0, 10);
 
-    tbody.innerHTML = sortedEvents.map((event, index) => {
-        const eventDate = utils.getDateFromFirestore(event.eventDate);
-        const revenue = (event.cost || 0) * (event.currentParticipants || 0);
+    tbody.innerHTML = sortedEvents.map(event => {
+        const eventDate = utils.getDateFromFirestore(event.eventDate || event.date);
+        const cost = parseFloat(event.cost) || 0;
+        const participants = event.currentParticipants 
+            ? parseInt(event.currentParticipants) 
+            : (event.participants ? event.participants.length : 0);
+        const revenue = cost * participants;
         const status = utils.getEventStatus(event);
 
         return `
             <tr>
-                <td>
-                    <strong>${utils.escapeHtml(event.name)}</strong>
-                </td>
+                <td><strong>${utils.escapeHtml(event.name)}</strong></td>
                 <td>
                     <span class="category-badge" data-category="${utils.escapeHtml(event.category || 'Other')}">
                         ${utils.escapeHtml(event.category || 'Other')}
                     </span>
                 </td>
-                <td>${event.currentParticipants || 0}</td>
+                <td>${participants}</td>
                 <td>${utils.formatCurrency(revenue)}</td>
                 <td>${utils.formatDate(eventDate)}</td>
                 <td>
@@ -825,9 +848,8 @@ function updateCategoryPerformance() {
     if (state.filteredEvents.length === 0) {
         container.innerHTML = `
             <div style="grid-column: 1 / -1; text-align: center; padding: 60px 20px; color: #6c757d;">
-                <i class="fas fa-layer-group" style="font-size: 4rem; margin-bottom: 16px; opacity: 0.3;"></i>
-                <h3 style="margin: 0 0 8px 0; color: #495057;">No Category Data</h3>
-                <p style="margin: 0; font-size: 0.9rem;">Create events to see category performance</p>
+                <i class="fas fa-layer-group" style="font-size: 3rem; opacity: 0.3; margin-bottom: 10px;"></i>
+                <p style="margin: 0;">No category data available</p>
             </div>
         `;
         return;
@@ -838,15 +860,17 @@ function updateCategoryPerformance() {
     state.filteredEvents.forEach(event => {
         const cat = event.category || 'Other';
         if (!categoryStats[cat]) {
-            categoryStats[cat] = {
-                count: 0,
-                participants: 0,
-                revenue: 0
-            };
+            categoryStats[cat] = { count: 0, participants: 0, revenue: 0 };
         }
         categoryStats[cat].count++;
-        categoryStats[cat].participants += event.currentParticipants || 0;
-        categoryStats[cat].revenue += (event.cost || 0) * (event.currentParticipants || 0);
+        
+        const participants = event.currentParticipants 
+            ? parseInt(event.currentParticipants) 
+            : (event.participants ? event.participants.length : 0);
+        categoryStats[cat].participants += participants;
+        
+        const cost = parseFloat(event.cost) || 0;
+        categoryStats[cat].revenue += cost * participants;
     });
 
     container.innerHTML = Object.entries(categoryStats)
@@ -859,7 +883,7 @@ function updateCategoryPerformance() {
                 <div class="performance-stats">
                     <div class="performance-stat">
                         <i class="fas fa-calendar"></i>
-                        <span>${stats.count} events</span>
+                        <span>Events</span>
                         <strong>${stats.count}</strong>
                     </div>
                     <div class="performance-stat">
@@ -885,9 +909,8 @@ function generateInsights() {
     if (state.filteredEvents.length === 0) {
         container.innerHTML = `
             <div style="grid-column: 1 / -1; text-align: center; padding: 60px 20px; color: #6c757d;">
-                <i class="fas fa-lightbulb" style="font-size: 4rem; margin-bottom: 16px; opacity: 0.3;"></i>
-                <h3 style="margin: 0 0 8px 0; color: #495057;">No Insights Available</h3>
-                <p style="margin: 0; font-size: 0.9rem;">Create events to generate insights</p>
+                <i class="fas fa-lightbulb" style="font-size: 3rem; opacity: 0.3; margin-bottom: 10px;"></i>
+                <p style="margin: 0;">No insights available</p>
             </div>
         `;
         return;
@@ -903,19 +926,23 @@ function generateInsights() {
     });
     const topCategory = Object.entries(categoryCount).sort(([, a], [, b]) => b - a)[0];
     if (topCategory) {
+        const percentage = Math.round((topCategory[1] / state.filteredEvents.length) * 100);
         insights.push({
             icon: 'trophy',
             color: '#ffc107',
             title: 'Top Category',
-            text: `${topCategory[0]} is your most popular category with ${topCategory[1]} events (${Math.round((topCategory[1] / state.filteredEvents.length) * 100)}% of total).`
+            text: `${topCategory[0]} is your most popular category with ${topCategory[1]} event${topCategory[1] !== 1 ? 's' : ''} (${percentage}% of total).`
         });
     }
 
     // Average participation
-    const avgParticipation = Math.round(
-        state.filteredEvents.reduce((sum, e) => sum + (e.currentParticipants || 0), 0) /
-        state.filteredEvents.length
-    );
+    const totalParticipants = state.filteredEvents.reduce((sum, e) => {
+        const participants = e.currentParticipants 
+            ? parseInt(e.currentParticipants) 
+            : (e.participants ? e.participants.length : 0);
+        return sum + participants;
+    }, 0);
+    const avgParticipation = Math.round(totalParticipants / state.filteredEvents.length);
     const benchmark = 50;
     const performanceText = avgParticipation >= benchmark
         ? `above the benchmark of ${benchmark}`
@@ -924,13 +951,18 @@ function generateInsights() {
         icon: 'chart-line',
         color: avgParticipation >= benchmark ? '#28a745' : '#17a2b8',
         title: 'Participation Rate',
-        text: `Your events average ${avgParticipation} participants each, ${performanceText}.`
+        text: `Your events average ${avgParticipation} participant${avgParticipation !== 1 ? 's' : ''} each, ${performanceText}.`
     });
 
     // Revenue insight
-    const totalRevenue = state.filteredEvents.reduce((sum, e) =>
-        sum + ((e.cost || 0) * (e.currentParticipants || 0)), 0
-    );
+    const totalRevenue = state.filteredEvents.reduce((sum, e) => {
+        const cost = parseFloat(e.cost) || 0;
+        const participants = e.currentParticipants 
+            ? parseInt(e.currentParticipants) 
+            : (e.participants ? e.participants.length : 0);
+        return sum + (cost * participants);
+    }, 0);
+    
     if (totalRevenue > 0) {
         const avgRevenuePerEvent = Math.round(totalRevenue / state.filteredEvents.length);
         insights.push({
@@ -943,29 +975,44 @@ function generateInsights() {
 
     // Best performing event
     const bestEvent = [...state.filteredEvents]
-        .sort((a, b) => (b.currentParticipants || 0) - (a.currentParticipants || 0))[0];
+        .sort((a, b) => {
+            const aCount = a.currentParticipants 
+                ? parseInt(a.currentParticipants) 
+                : (a.participants ? a.participants.length : 0);
+            const bCount = b.currentParticipants 
+                ? parseInt(b.currentParticipants) 
+                : (b.participants ? b.participants.length : 0);
+            return bCount - aCount;
+        })[0];
+    
     if (bestEvent) {
-        insights.push({
-            icon: 'star',
-            color: '#ff6600',
-            title: 'Top Performer',
-            text: `"${bestEvent.name}" is your best event with ${bestEvent.currentParticipants || 0} participants.`
-        });
+        const participants = bestEvent.currentParticipants 
+            ? parseInt(bestEvent.currentParticipants) 
+            : (bestEvent.participants ? bestEvent.participants.length : 0);
+        
+        if (participants > 0) {
+            insights.push({
+                icon: 'star',
+                color: '#ff6600',
+                title: 'Top Performer',
+                text: `"${bestEvent.name}" is your best event with ${participants} participant${participants !== 1 ? 's' : ''}.`
+            });
+        }
     }
 
     // Event frequency
     if (state.filteredEvents.length > 0) {
         const daysWithEvents = new Set(state.filteredEvents.map(e => {
             const date = utils.getDateFromFirestore(e.createdAt);
-            return date ? date.toISOString().split('T')[0] : null;
+            return date && !isNaN(date.getTime()) ? date.toISOString().split('T')[0] : null;
         }).filter(Boolean)).size;
 
-        const avgEventsPerDay = (state.filteredEvents.length / daysWithEvents).toFixed(1);
+        const avgEventsPerDay = (state.filteredEvents.length / Math.max(daysWithEvents, 1)).toFixed(1);
         insights.push({
             icon: 'calendar-check',
             color: '#dc3545',
             title: 'Event Frequency',
-            text: `Created events on ${daysWithEvents} different days, averaging ${avgEventsPerDay} events per active day.`
+            text: `Created events on ${daysWithEvents} different day${daysWithEvents !== 1 ? 's' : ''}, averaging ${avgEventsPerDay} event${avgEventsPerDay !== '1.0' ? 's' : ''} per active day.`
         });
     }
 
@@ -1004,29 +1051,29 @@ window.exportReport = function () {
     const reportData = {
         generatedAt: new Date().toISOString(),
         timeFilter: state.timeFilter === 0 ? 'All time' : `Last ${state.timeFilter} days`,
-        searchQuery: state.searchQuery || 'None',
-        categoryFilter: state.categoryFilter || 'All',
         summary: {
             totalEvents: state.filteredEvents.length,
             totalParticipants: state.filteredEvents.reduce((sum, e) =>
-                sum + (e.currentParticipants || 0), 0
+                sum + (parseInt(e.currentParticipants) || 0), 0
             ),
-            totalRevenue: state.filteredEvents.reduce((sum, e) =>
-                sum + ((e.cost || 0) * (e.currentParticipants || 0)), 0
-            ),
+            totalRevenue: state.filteredEvents.reduce((sum, e) => {
+                const cost = parseFloat(e.cost) || 0;
+                const participants = parseInt(e.currentParticipants) || 0;
+                return sum + (cost * participants);
+            }, 0),
             avgParticipation: state.filteredEvents.length > 0
                 ? Math.round(state.filteredEvents.reduce((sum, e) =>
-                    sum + (e.currentParticipants || 0), 0) / state.filteredEvents.length)
+                    sum + (parseInt(e.currentParticipants) || 0), 0) / state.filteredEvents.length)
                 : 0
         },
         events: state.filteredEvents.map(e => ({
             name: e.name,
             category: e.category,
             location: e.location,
-            participants: e.currentParticipants,
-            maxParticipants: e.maxParticipants,
-            cost: e.cost,
-            revenue: (e.cost || 0) * (e.currentParticipants || 0),
+            participants: parseInt(e.currentParticipants) || 0,
+            maxParticipants: parseInt(e.maxParticipants) || 0,
+            cost: parseFloat(e.cost) || 0,
+            revenue: (parseFloat(e.cost) || 0) * (parseInt(e.currentParticipants) || 0),
             eventDate: utils.getDateFromFirestore(e.eventDate)?.toISOString(),
             createdAt: utils.getDateFromFirestore(e.createdAt)?.toISOString(),
             status: utils.getEventStatus(e)
@@ -1048,56 +1095,6 @@ window.exportReport = function () {
     utils.showToast('Report exported successfully!', 'success');
 };
 
-window.exportCSV = function () {
-    if (!state.filteredEvents || state.filteredEvents.length === 0) {
-        utils.showToast('No data to export', 'error');
-        return;
-    }
-
-    const headers = ['Name', 'Category', 'Location', 'Participants', 'Max Participants', 'Cost',
-        'Revenue', 'Event Date', 'Created At', 'Status'];
-    const rows = state.filteredEvents.map(e => {
-        const eventDate = utils.getDateFromFirestore(e.eventDate);
-        const createdAt = utils.getDateFromFirestore(e.createdAt);
-        const revenue = (e.cost || 0) * (e.currentParticipants || 0);
-        return [
-            `"${(e.name || '').replace(/"/g, '""')}"`,
-            `"${(e.category || '').replace(/"/g, '""')}"`,
-            `"${(e.location || '').replace(/"/g, '""')}"`,
-            e.currentParticipants || 0,
-            e.maxParticipants || 0,
-            e.cost || 0,
-            revenue,
-            eventDate ? utils.formatDate(eventDate, 'long') : '',
-            createdAt ? utils.formatDate(createdAt, 'long') : '',
-            utils.getEventStatus(e)
-        ].join(',');
-    });
-
-    const csvContent = [headers.join(','), ...rows].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `analytics-${new Date().toISOString().split('T')[0]}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-
-    utils.showToast('CSV exported successfully!', 'success');
-};
-
-// Refresh Data
-window.refreshData = function () {
-    const btn = document.querySelector('.refresh-btn');
-    if (btn) {
-        btn.classList.add('refreshing');
-        setTimeout(() => btn.classList.remove('refreshing'), 1000);
-    }
-    loadAnalyticsData();
-};
-
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
     initializeUI();
@@ -1105,7 +1102,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function initializeUI() {
-    // Dropdown
+    // User dropdown
     const userMenuBtn = document.querySelector('.user-menu-btn');
     const userDropdown = document.querySelector('.user-dropdown');
 
@@ -1115,10 +1112,8 @@ function initializeUI() {
             userDropdown.classList.toggle('show');
         });
 
-        document.addEventListener('click', (e) => {
-            if (!userMenuBtn.contains(e.target) && !userDropdown.contains(e.target)) {
-                userDropdown.classList.remove('show');
-            }
+        document.addEventListener('click', () => {
+            userDropdown.classList.remove('show');
         });
     }
 
@@ -1167,28 +1162,9 @@ function initializeUI() {
 }
 
 function initializeFilters() {
-    // Time filter
     const timeFilter = document.getElementById('timeFilter');
     if (timeFilter) {
         timeFilter.addEventListener('change', window.applyTimeFilter);
-    }
-
-    // Search filter (if exists)
-    const searchInput = document.getElementById('analytics-search');
-    if (searchInput) {
-        searchInput.addEventListener('input', utils.debounce((e) => {
-            state.searchQuery = e.target.value.trim();
-            applyFilters();
-        }, 300));
-    }
-
-    // Category filter (if exists)
-    const categoryFilter = document.getElementById('analytics-category-filter');
-    if (categoryFilter) {
-        categoryFilter.addEventListener('change', (e) => {
-            state.categoryFilter = e.target.value;
-            applyFilters();
-        });
     }
 }
 
