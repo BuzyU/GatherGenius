@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Event Registration - GatherGenius</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <!-- EmailJS SDK -->
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
     <style>
         :root {
             --primary-color: #ff6600;
@@ -465,6 +467,28 @@
             border-left: 4px solid #dc3545;
         }
 
+        .email-status {
+            margin-top: 15px;
+            padding: 12px;
+            border-radius: 4px;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .email-status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .email-status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+
         @media (max-width: 768px) {
             .form-header,
             .event-info,
@@ -634,9 +658,7 @@
                 <div class="response-content" id="responseContent"></div>
             </div>
             
-            <p style="font-size: 0.9rem; color: #666; margin-top: 15px;">
-                A confirmation email has been sent to your registered email address.
-            </p>
+            <div id="emailStatusMessage"></div>
             
             <button class="close-modal-btn" onclick="closeSuccessModal()">Close</button>
         </div>
@@ -646,6 +668,11 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     <script>
+        // Initialize EmailJS
+        (function() {
+            emailjs.init("Z6fG-Xm6rkQHNTWiQ");
+        })();
+
         // Firebase Configuration
         const firebaseConfig = {
             apiKey: "AIzaSyCKd_iH-McAMrKI_0YDoYG0xjn2KrQpTOQ",
@@ -764,7 +791,6 @@
             document.getElementById('fullName').value = currentUser.displayName || '';
             document.getElementById('email').value = currentUser.email || '';
             
-            // Pre-fill phone if available from user profile
             if (userProfile && userProfile.phone) {
                 document.getElementById('phone').value = userProfile.phone;
             }
@@ -863,6 +889,45 @@
             container.appendChild(section);
         }
 
+        // Send confirmation email using EmailJS
+        async function sendConfirmationEmail(event, participant) {
+            try {
+                const emailParams = {
+                    to_email: participant.email,
+                    to_name: participant.name,
+                    event_name: event.name,
+                    event_date: new Date(event.date).toLocaleString('en-IN', { 
+                        weekday: 'long', 
+                        year: 'numeric', 
+                        month: 'long', 
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    }),
+                    event_location: event.location,
+                    event_cost: `₹${event.cost}`,
+                    team_name: participant.teamName || 'N/A',
+                    team_members: participant.teamMembers.join(', '),
+                    phone: participant.phone,
+                    registration_id: participant.uid.substring(0, 8).toUpperCase(),
+                    registration_date: new Date(participant.registeredAt).toLocaleString('en-IN'),
+                    confirmation_message: generateResponseTemplate(event, participant)
+                };
+
+                await emailjs.send(
+                    'service_haf0742',
+                    'template_46w5oiv',
+                    emailParams
+                );
+                
+                console.log('Confirmation email sent successfully');
+                return true;
+            } catch (error) {
+                console.error('Failed to send confirmation email:', error);
+                return false;
+            }
+        }
+
         // Form submission handler
         document.getElementById('registrationForm').addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -927,12 +992,16 @@
                     photoURL: currentUser.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(currentUser.displayName)}`
                 };
 
+                // Update Firestore
                 await eventRef.update({
                     participants: firebase.firestore.FieldValue.arrayUnion(newParticipant)
                 });
 
+                // Send confirmation email
+                const emailSent = await sendConfirmationEmail(event, newParticipant);
+
                 // Show success modal
-                showSuccessModal(event, newParticipant);
+                showSuccessModal(event, newParticipant, emailSent);
 
             } catch (error) {
                 console.error('Error registering:', error);
@@ -944,14 +1013,11 @@
 
         // Generate response template
         function generateResponseTemplate(event, participant) {
-            // Check if event has custom template
             const template = event.responseTemplate || null;
             
             if (template && template.enabled) {
-                // Use custom template
                 return customizeTemplate(template, event, participant);
             } else {
-                // Use default template
                 return generateDefaultTemplate(event, participant);
             }
         }
@@ -1015,7 +1081,6 @@
         function customizeTemplate(template, event, participant) {
             let response = template.content || '';
             
-            // Replace placeholders
             response = response.replace(/\{eventName\}/g, event.name);
             response = response.replace(/\{participantName\}/g, participant.name);
             response = response.replace(/\{eventDate\}/g, new Date(event.date).toLocaleString('en-IN', { 
@@ -1035,7 +1100,6 @@
             response = response.replace(/\{registrationId\}/g, participant.uid.substring(0, 8).toUpperCase());
             response = response.replace(/\{registrationDate\}/g, new Date(participant.registeredAt).toLocaleString('en-IN'));
             
-            // Add custom answers if included
             if (template.includeCustomAnswers && Object.keys(participant.customAnswers).length > 0) {
                 response += `\n\n📝 Your Responses:\n`;
                 response += `━━━━━━━━━━━━━━━━━━━━\n`;
@@ -1050,12 +1114,12 @@
         }
 
         // Show success modal
-        function showSuccessModal(event, participant) {
+        function showSuccessModal(event, participant, emailSent = false) {
             const modal = document.getElementById('successModal');
             const detailsDiv = document.getElementById('confirmationDetails');
             const responseDiv = document.getElementById('responseContent');
+            const emailStatusDiv = document.getElementById('emailStatusMessage');
             
-            // Confirmation message
             const confirmationMessage = event.confirmationMessage || 
                 'Thank you for registering! We look forward to seeing you at the event.';
             
@@ -1083,6 +1147,23 @@
             // Generate and display response template
             const responseTemplate = generateResponseTemplate(event, participant);
             responseDiv.innerHTML = `<pre style="white-space: pre-wrap; font-family: inherit;">${responseTemplate}</pre>`;
+            
+            // Email status message
+            if (emailSent) {
+                emailStatusDiv.innerHTML = `
+                    <div class="email-status success">
+                        <i class="fas fa-check-circle"></i>
+                        <span>A confirmation email has been sent to ${participant.email}</span>
+                    </div>
+                `;
+            } else {
+                emailStatusDiv.innerHTML = `
+                    <div class="email-status info">
+                        <i class="fas fa-info-circle"></i>
+                        <span>Please save your registration details above for your records</span>
+                    </div>
+                `;
+            }
             
             modal.classList.add('active');
         }
@@ -1119,3 +1200,5 @@
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
     </script>
+</body>
+</html>
