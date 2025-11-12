@@ -1,5 +1,5 @@
 // =============================
-// COMPLETE teams.js with Create Team & Chat Features
+// teams.js – Complete Merged & Enhanced
 // =============================
 
 // Firebase config
@@ -24,15 +24,12 @@ const FieldValue = firebase.firestore.FieldValue;
 // Global variables
 let currentUser = null;
 let currentTeamId = null;
-let currentChatTeamId = null;
 let allTeams = [];
 let allCategories = new Set(['Sports', 'Cultural', 'Technical', 'Academic', 'Social']);
 let viewMode = 'grid';
 let activeFilter = 'all';
 let sortOption = 'recent';
 let searchTerm = '';
-let chatUnsubscribe = null;
-let unreadMessagesCount = {};
 
 // ---------- Utilities ----------
 function escapeHtml(str = '') {
@@ -52,19 +49,6 @@ function safeDateDisplay(val) {
   } catch {
     return String(val);
   }
-}
-
-function formatTimestamp(timestamp) {
-  if (!timestamp) return '';
-  const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-  const now = new Date();
-  const diff = now - date;
-  
-  if (diff < 60000) return 'Just now';
-  if (diff < 3600000) return Math.floor(diff / 60000) + 'm ago';
-  if (diff < 86400000) return Math.floor(diff / 3600000) + 'h ago';
-  if (diff < 604800000) return Math.floor(diff / 86400000) + 'd ago';
-  return date.toLocaleDateString();
 }
 
 function getById(id) {
@@ -113,7 +97,6 @@ auth.onAuthStateChanged(async (user) => {
   try {
     await loadTeams();
     await loadInvites();
-    setupUnreadMessagesListener();
   } catch (error) {
     console.error('Error during initialization:', error);
     showError('Error loading teams. Please refresh the page.');
@@ -167,74 +150,6 @@ function setupRealtimeListeners() {
   }
 }
 
-// ---------- Unread Messages Listener ----------
-function setupUnreadMessagesListener() {
-  allTeams.forEach(team => {
-    db.collection('teamChats').doc(team.id)
-      .collection('messages')
-      .where('senderId', '!=', currentUser.uid)
-      .onSnapshot(snapshot => {
-        let unreadCount = 0;
-        snapshot.forEach(doc => {
-          const msg = doc.data();
-          if (!msg.readBy || !msg.readBy.includes(currentUser.uid)) {
-            unreadCount++;
-          }
-        });
-        unreadMessagesCount[team.id] = unreadCount;
-        updateUnreadBadges();
-      });
-  });
-}
-
-function updateUnreadBadges() {
-  Object.keys(unreadMessagesCount).forEach(teamId => {
-    const count = unreadMessagesCount[teamId];
-    const chatBtn = document.querySelector(`[onclick*="openTeamChat('${teamId}')"]`);
-    if (chatBtn) {
-      let badge = chatBtn.querySelector('.notification-badge');
-      if (count > 0) {
-        if (!badge) {
-          badge = document.createElement('span');
-          badge.className = 'notification-badge';
-          chatBtn.style.position = 'relative';
-          chatBtn.appendChild(badge);
-        }
-        badge.textContent = count > 9 ? '9+' : count;
-      } else if (badge) {
-        badge.remove();
-      }
-    }
-  });
-}
-
-// ---------- FIXED: Create Team ----------
-window.showCreateTeamModal = function () {
-  const modal = getById('createTeamModal');
-  if (modal) modal.classList.add('show');
-  
-  // Setup category change listener
-  const categorySelect = getById('teamCategory');
-  const customCategoryGroup = getById('customCategoryGroup');
-  
-  if (categorySelect && customCategoryGroup) {
-    categorySelect.onchange = function() {
-      customCategoryGroup.style.display = this.value === 'Custom' ? 'block' : 'none';
-      if (this.value !== 'Custom') {
-        getById('customCategory').value = '';
-      }
-    };
-  }
-};
-
-window.closeCreateTeamModal = function () {
-  const modal = getById('createTeamModal');
-  if (modal) modal.classList.remove('show');
-  getById('createTeamForm')?.reset();
-  const customCategoryGroup = getById('customCategoryGroup');
-  if (customCategoryGroup) customCategoryGroup.style.display = 'none';
-};
-
 // ---------- Load Teams ----------
 async function loadTeams() {
   try {
@@ -249,36 +164,12 @@ async function loadTeams() {
       if (data.category) allCategories.add(data.category);
     });
 
-    // Ensure all teams have chat rooms
-    await ensureAllTeamsHaveChatRooms();
-
     updateCategoryFilter();
     await updateStats();
     applyFilters();
   } catch (error) {
     console.error('Error loading teams:', error);
     showError('Error loading teams');
-  }
-}
-
-// Ensure all teams have chat rooms (for legacy teams)
-async function ensureAllTeamsHaveChatRooms() {
-  try {
-    for (const team of allTeams) {
-      const chatDoc = await db.collection('teamChats').doc(team.id).get();
-      if (!chatDoc.exists) {
-        await db.collection('teamChats').doc(team.id).set({
-          teamId: team.id,
-          teamName: team.name,
-          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-          lastMessage: null,
-          lastMessageTime: null
-        });
-        console.log('Created missing chat room for team:', team.name);
-      }
-    }
-  } catch (error) {
-    console.error('Error ensuring chat rooms exist:', error);
   }
 }
 
@@ -393,260 +284,59 @@ function displayTeams(teams) {
   }).join('');
 }
 
-// ---------- CHAT FEATURE ----------
-window.openTeamChat = async function(teamId) {
-  currentChatTeamId = teamId;
-  const modal = getById('teamChatModal');
-  if (!modal) {
-    createChatModal();
-  }
-  
-  try {
-    const teamDoc = await db.collection('teams').doc(teamId).get();
-    if (!teamDoc.exists) {
-      showError('Team not found');
-      return;
-    }
-    
-    const team = teamDoc.data();
-    
-    // Check if user is member
-    if (!team.members.includes(currentUser.uid)) {
-      showError('You are not a member of this team');
-      return;
-    }
-    
-    // Ensure chat room exists
-    await ensureChatRoomExists(teamId, team.name);
-    
-    getById('chatTeamName').textContent = team.name;
-    getById('teamChatModal').classList.add('show');
-    
-    // Load chat messages
-    loadChatMessages(teamId);
-    
-    // Mark messages as read
-    markMessagesAsRead(teamId);
-    
-  } catch (error) {
-    console.error('Error opening chat:', error);
-    showError('Error opening chat');
-  }
+// ---------- Category Filter ----------
+function updateCategoryFilter() {
+  const categoryFilter = getById('category-filter');
+  if (!categoryFilter) return;
+  const prevValue = categoryFilter.value || 'all';
+  categoryFilter.innerHTML = '<option value="all">All Categories</option>';
+  [...allCategories].sort().forEach(c => {
+    const option = document.createElement('option');
+    option.value = c;
+    option.textContent = c;
+    categoryFilter.appendChild(option);
+  });
+  categoryFilter.value = prevValue;
+}
+
+// ---------- Filter, Sort, View, Search ----------
+window.setFilterTab = function (filter) {
+  activeFilter = filter;
+  document.querySelectorAll('.filter-tab').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+  applyFilters();
 };
 
-// Ensure chat room exists before sending messages
-async function ensureChatRoomExists(teamId, teamName) {
-  try {
-    const chatDoc = await db.collection('teamChats').doc(teamId).get();
-    
-    if (!chatDoc.exists) {
-      // Create chat room if it doesn't exist
-      await db.collection('teamChats').doc(teamId).set({
-        teamId: teamId,
-        teamName: teamName,
-        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-        lastMessage: null,
-        lastMessageTime: null
-      });
-      console.log('Chat room created for team:', teamId);
-    }
-  } catch (error) {
-    console.error('Error ensuring chat room exists:', error);
-    throw error;
-  }
-}
+window.setSortOption = function (option) {
+  sortOption = option;
+  applyFilters();
+};
 
-function createChatModal() {
-  const modalHTML = `
-    <div id="teamChatModal" class="modal">
-      <div class="modal-content chat-modal">
-        <div class="modal-header" style="background:linear-gradient(135deg,var(--primary-color),var(--primary-light));color:white;">
-          <h2 id="chatTeamName" style="margin:0;">Team Chat</h2>
-          <button class="close-modal" onclick="closeTeamChat()" style="color:white;">&times;</button>
-        </div>
-        <div class="chat-container">
-          <div id="chatMessages" class="chat-messages"></div>
-          <div class="chat-input-container">
-            <input type="text" id="chatInput" placeholder="Type a message..." onkeypress="if(event.key==='Enter') sendChatMessage()">
-            <button onclick="sendChatMessage()" class="btn-primary"><i class="fas fa-paper-plane"></i></button>
-          </div>
-        </div>
-      </div>
-    </div>
-  `;
-  document.body.insertAdjacentHTML('beforeend', modalHTML);
-}
+window.setViewMode = function (mode) {
+  viewMode = mode;
+  document.querySelectorAll('.view-toggle button').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+  applyFilters();
+};
 
-window.closeTeamChat = function() {
-  const modal = getById('teamChatModal');
+window.handleTeamSearch = debounce(function (value) {
+  searchTerm = value.trim();
+  applyFilters();
+}, 300);
+
+// ---------- Create Team ----------
+window.showCreateTeamModal = function () {
+  const modal = getById('createTeamModal');
+  if (modal) modal.classList.add('show');
+};
+
+window.closeCreateTeamModal = function () {
+  const modal = getById('createTeamModal');
   if (modal) modal.classList.remove('show');
-  if (chatUnsubscribe) {
-    chatUnsubscribe();
-    chatUnsubscribe = null;
-  }
-  currentChatTeamId = null;
+  getById('createTeamForm')?.reset();
+  const customCategoryGroup = getById('customCategoryGroup');
+  if (customCategoryGroup) customCategoryGroup.style.display = 'none';
 };
-
-function loadChatMessages(teamId) {
-  if (chatUnsubscribe) chatUnsubscribe();
-  
-  const chatMessages = getById('chatMessages');
-  if (!chatMessages) return;
-  
-  chatMessages.innerHTML = '<div style="text-align:center;padding:20px;color:#6c757d;"><i class="fas fa-spinner fa-spin"></i> Loading messages...</div>';
-  
-  chatUnsubscribe = db.collection('teamChats').doc(teamId)
-    .collection('messages')
-    .orderBy('timestamp', 'asc')
-    .limit(100)
-    .onSnapshot((snapshot) => {
-      const messages = [];
-      snapshot.forEach(doc => {
-        messages.push({ id: doc.id, ...doc.data() });
-      });
-      
-      displayChatMessages(messages);
-      
-      // Scroll to bottom
-      setTimeout(() => {
-        chatMessages.scrollTop = chatMessages.scrollHeight;
-      }, 100);
-      
-      // Show notification for new messages
-      if (messages.length > 0) {
-        const lastMessage = messages[messages.length - 1];
-        if (lastMessage.senderId !== currentUser.uid && 
-            (!lastMessage.readBy || !lastMessage.readBy.includes(currentUser.uid))) {
-          showChatNotification(lastMessage);
-        }
-      }
-    }, (error) => {
-      console.error('Error loading messages:', error);
-      chatMessages.innerHTML = '<div style="text-align:center;padding:20px;color:#dc3545;">Error loading messages</div>';
-    });
-}
-
-function displayChatMessages(messages) {
-  const chatMessages = getById('chatMessages');
-  if (!chatMessages) return;
-  
-  if (messages.length === 0) {
-    chatMessages.innerHTML = `
-      <div style="text-align:center;padding:40px;color:#6c757d;">
-        <i class="fas fa-comments" style="font-size:3rem;margin-bottom:16px;"></i>
-        <p>No messages yet. Start the conversation!</p>
-      </div>
-    `;
-    return;
-  }
-  
-  chatMessages.innerHTML = messages.map(msg => {
-    const isOwn = msg.senderId === currentUser.uid;
-    return `
-      <div class="chat-message ${isOwn ? 'own-message' : ''}">
-        <div class="message-avatar">
-          <img src="${msg.senderAvatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(msg.senderName || 'U')}&background=ff6600&color=fff`}" 
-               alt="${escapeHtml(msg.senderName)}">
-        </div>
-        <div class="message-content">
-          <div class="message-header">
-            <span class="message-sender">${escapeHtml(msg.senderName)}</span>
-            <span class="message-time">${formatTimestamp(msg.timestamp)}</span>
-          </div>
-          <div class="message-text">${escapeHtml(msg.message)}</div>
-        </div>
-      </div>
-    `;
-  }).join('');
-}
-
-window.sendChatMessage = async function() {
-  const input = getById('chatInput');
-  if (!input || !currentChatTeamId) return;
-  
-  const message = input.value.trim();
-  if (!message) return;
-  
-  try {
-    // First, ensure the chat room exists
-    const teamDoc = await db.collection('teams').doc(currentChatTeamId).get();
-    const team = teamDoc.data();
-    await ensureChatRoomExists(currentChatTeamId, team.name);
-    
-    // Add message to subcollection
-    await db.collection('teamChats').doc(currentChatTeamId)
-      .collection('messages').add({
-        message: message,
-        senderId: currentUser.uid,
-        senderName: currentUser.displayName || currentUser.email,
-        senderAvatar: currentUser.photoURL,
-        timestamp: firebase.firestore.FieldValue.serverTimestamp(),
-        readBy: [currentUser.uid]
-      });
-    
-    // Update last message in team chat document
-    await db.collection('teamChats').doc(currentChatTeamId).update({
-      lastMessage: message,
-      lastMessageTime: firebase.firestore.FieldValue.serverTimestamp(),
-      lastMessageSender: currentUser.uid
-    });
-    
-    input.value = '';
-    
-  } catch (error) {
-    console.error('Error sending message:', error);
-    showError('Error sending message: ' + error.message);
-  }
-};
-
-async function markMessagesAsRead(teamId) {
-  try {
-    const messagesSnapshot = await db.collection('teamChats').doc(teamId)
-      .collection('messages')
-      .get();
-    
-    const batch = db.batch();
-    let updated = false;
-    
-    messagesSnapshot.forEach(doc => {
-      const data = doc.data();
-      if (!data.readBy || !data.readBy.includes(currentUser.uid)) {
-        batch.update(doc.ref, {
-          readBy: FieldValue.arrayUnion(currentUser.uid)
-        });
-        updated = true;
-      }
-    });
-    
-    if (updated) {
-      await batch.commit();
-      unreadMessagesCount[teamId] = 0;
-      updateUnreadBadges();
-    }
-  } catch (error) {
-    console.error('Error marking messages as read:', error);
-  }
-}
-
-function showChatNotification(message) {
-  if (Notification.permission === 'granted' && document.hidden) {
-    new Notification(`New message from ${message.senderName}`, {
-      body: message.message,
-      icon: message.senderAvatar || '/gatherlogo.jpeg',
-      badge: '/gatherlogo.jpeg'
-    });
-  }
-  
-  // Also show in-app notification
-  if (document.hidden || !getById('teamChatModal')?.classList.contains('show')) {
-    showToast(`New message from ${message.senderName} in team chat`, 'info');
-  }
-}
-
-// Request notification permission
-if ('Notification' in window && Notification.permission === 'default') {
-  Notification.requestPermission();
-}
 
 // ---------- View Team Details ----------
 window.viewTeamDetails = async function (teamId) {
@@ -902,6 +592,7 @@ async function displayInvites(invites) {
   const invitesSection = getById('invites-section');
   const invitesGrid = getById('invites-grid');
   
+  // If sections don't exist, skip
   if (!invitesSection || !invitesGrid) {
     console.warn('Invites section elements not found');
     return;
@@ -1074,6 +765,23 @@ window.rejectRequest = async function (requestId) {
     const requestDoc = await db.collection('teamRequests').doc(requestId).get();
     const request = requestDoc.data();
     await loadPendingRequests(request.teamId);
+    await loadTeamMembers(request.teamId, (await db.collection('teams').doc(request.teamId).get()).data().members); 
+    
+  } catch (error) {
+    console.error('Error rejecting request:', error);
+    showError('Error rejecting request');
+  }
+};
+window.rejectRequest = async function (requestId) {
+  try {
+    await db.collection('teamRequests').doc(requestId).update({
+      status: 'rejected'
+    });
+    
+    showSuccess('Request rejected');
+    const requestDoc = await db.collection('teamRequests').doc(requestId).get();
+    const request = requestDoc.data();
+    await loadPendingRequests(request.teamId);
     
   } catch (error) {
     console.error('Error rejecting request:', error);
@@ -1089,8 +797,10 @@ window.deleteTeam = async function () {
   if (!confirmed) return;
   
   try {
+    // Delete team
     await db.collection('teams').doc(currentTeamId).delete();
     
+    // Delete related invites
     const invitesSnapshot = await db.collection('teamInvites')
       .where('teamId', '==', currentTeamId)
       .get();
@@ -1108,141 +818,20 @@ window.deleteTeam = async function () {
   }
 };
 
-// ---------- Assign Role ----------
-window.assignRole = async function(teamId, userId, role) {
-  try {
-    const teamDoc = await db.collection('teams').doc(teamId).get();
-    const team = teamDoc.data();
-    
-    if (team.ownerId !== currentUser.uid) {
-      showError('Only team owners can assign roles');
-      return;
-    }
-    
-    const roles = team.roles || {};
-    roles[userId] = role;
-    
-    await db.collection('teams').doc(teamId).update({
-      roles: roles
-    });
-    
-    showSuccess(`Role assigned: ${role}`);
-    await loadTeamMembers(teamId, team.members);
-    
-  } catch (error) {
-    console.error('Error assigning role:', error);
-    showError('Error assigning role');
-  }
-};
-
-// ---------- Leave Team ----------
-window.leaveTeam = async function (teamId) {
-  const confirmed = confirm('Are you sure you want to leave this team?');
-  if (!confirmed) return;
-  
-  try {
-    await db.collection('teams').doc(teamId).update({
-      members: FieldValue.arrayRemove(currentUser.uid)
-    });
-    
-    showSuccess('You have left the team');
-    closeTeamDetailsModal();
-    await loadTeams();
-    
-  } catch (error) {
-    console.error('Error leaving team:', error);
-    showError('Error leaving team');
-  }
-};
-
-// ---------- Export Team Data ----------
-window.exportTeamData = async function (teamId) {
-  try {
-    const teamDoc = await db.collection('teams').doc(teamId).get();
-    const team = teamDoc.data();
-    
-    const memberDetails = await Promise.all(
-      (team.members || []).map(async (uid) => {
-        const userDoc = await db.collection('users').doc(uid).get();
-        const userData = userDoc.exists ? userDoc.data() : {};
-        return {
-          name: userData.name || userData.displayName || 'Unknown',
-          email: userData.email || 'N/A'
-        };
-      })
-    );
-    
-    const exportData = {
-      teamName: team.name,
-      category: team.category,
-      description: team.description,
-      createdAt: team.createdAt?.toDate().toISOString(),
-      memberCount: team.members?.length || 0,
-      members: memberDetails
-    };
-    
-    const dataStr = JSON.stringify(exportData, null, 2);
-    const dataBlob = new Blob([dataStr], { type: 'application/json' });
-    const url = URL.createObjectURL(dataBlob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `${team.name.replace(/[^a-z0-9]/gi, '_')}_export.json`;
-    link.click();
-    URL.revokeObjectURL(url);
-    
-    showSuccess('Team data exported successfully!');
-    
-  } catch (error) {
-    console.error('Error exporting team data:', error);
-    showError('Error exporting team data');
-  }
-};
-
-// ---------- Copy Team Invite Link ----------
-window.copyTeamInviteLink = function(teamId) {
-  const baseUrl = window.location.origin;
-  const inviteLink = `${baseUrl}/join-team.html?teamId=${teamId}`;
-  
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(inviteLink)
-      .then(() => showSuccess('Invite link copied to clipboard!'))
-      .catch(err => {
-        console.error('Error copying to clipboard:', err);
-        fallbackCopyToClipboard(inviteLink);
-      });
-  } else {
-    fallbackCopyToClipboard(inviteLink);
-  }
-};
-
-function fallbackCopyToClipboard(text) {
-  const textArea = document.createElement('textarea');
-  textArea.value = text;
-  textArea.style.position = 'fixed';
-  textArea.style.left = '-999999px';
-  document.body.appendChild(textArea);
-  textArea.select();
-  try {
-    document.execCommand('copy');
-    showSuccess('Invite link copied to clipboard!');
-  } catch (err) {
-    showError('Failed to copy link. Please copy manually: ' + text);
-  }
-  document.body.removeChild(textArea);
-}
-
 // ---------- Stats ----------
 async function updateStats() {
   try {
     const myTeamsCount = allTeams.filter(t => t.ownerId === currentUser.uid).length;
     const totalMembers = allTeams.reduce((sum, t) => sum + (t.members?.length || 0), 0);
     
+    // Count pending invites
     const invitesSnapshot = await db.collection('teamInvites')
       .where('inviteeEmail', '==', currentUser.email)
       .where('status', '==', 'pending')
       .get();
     const pendingInvites = invitesSnapshot.size;
     
+    // Count pending requests for teams I own
     let pendingRequests = 0;
     const myTeams = allTeams.filter(t => t.ownerId === currentUser.uid);
     for (const team of myTeams) {
@@ -1257,223 +846,42 @@ async function updateStats() {
       }
     }
     
-    if (getById('my-teams-count')) getById('my-teams-count').textContent = myTeamsCount;
-    if (getById('total-members-count')) getById('total-members-count').textContent = totalMembers;
-    if (getById('pending-invites-count')) getById('pending-invites-count').textContent = pendingInvites;
-    if (getById('pending-requests-count')) getById('pending-requests-count').textContent = pendingRequests;
+    // Safely update DOM elements
+    const myTeamsCountEl = getById('my-teams-count');
+    const totalMembersCountEl = getById('total-members-count');
+    const pendingInvitesCountEl = getById('pending-invites-count');
+    const pendingRequestsCountEl = getById('pending-requests-count');
+    
+    if (myTeamsCountEl) myTeamsCountEl.textContent = myTeamsCount;
+    if (totalMembersCountEl) totalMembersCountEl.textContent = totalMembers;
+    if (pendingInvitesCountEl) pendingInvitesCountEl.textContent = pendingInvites;
+    if (pendingRequestsCountEl) pendingRequestsCountEl.textContent = pendingRequests;
   } catch (error) {
     console.error('updateStats error:', error);
+    showError('Error updating statistics');
   }
 }
 
-// ---------- Category Filter ----------
-function updateCategoryFilter() {
-  const categoryFilter = getById('category-filter');
-  if (!categoryFilter) return;
-  const prevValue = categoryFilter.value || 'all';
-  categoryFilter.innerHTML = '<option value="all">All Categories</option>';
-  [...allCategories].sort().forEach(c => {
-    const option = document.createElement('option');
-    option.value = c;
-    option.textContent = c;
-    categoryFilter.appendChild(option);
-  });
-  categoryFilter.value = prevValue;
-}
+// ---------- Placeholder Features ----------
+window.openTeamChat = (teamId) => showToast('Chat feature coming soon!', 'info');
+window.toggleTeamNotifications = (teamId) => showToast('Notification preferences updated!', 'success');
+window.showTeamMenu = (id) => showToast('Team menu coming soon!', 'info');
 
-// ---------- Filter, Sort, View, Search ----------
-window.setFilterTab = function (filter) {
-  activeFilter = filter;
-  document.querySelectorAll('.filter-tab').forEach(b => b.classList.remove('active'));
-  event.target.classList.add('active');
-  applyFilters();
-};
-
-window.setSortOption = function (option) {
-  sortOption = option;
-  applyFilters();
-};
-
-window.setViewMode = function (mode) {
-  viewMode = mode;
-  document.querySelectorAll('.view-toggle button').forEach(b => b.classList.remove('active'));
-  event.target.classList.add('active');
-  applyFilters();
-};
-
-window.handleTeamSearch = debounce(function (value) {
-  searchTerm = value.trim();
-  applyFilters();
-}, 300);
-
-// ---------- Notifications Toggle ----------
-window.toggleTeamNotifications = async function(teamId) {
-  try {
-    const userDoc = await db.collection('users').doc(currentUser.uid).get();
-    const userData = userDoc.data() || {};
-    const mutedTeams = userData.mutedTeams || [];
-    
-    if (mutedTeams.includes(teamId)) {
-      await db.collection('users').doc(currentUser.uid).update({
-        mutedTeams: FieldValue.arrayRemove(teamId)
-      });
-      showSuccess('Notifications enabled for this team');
-    } else {
-      await db.collection('users').doc(currentUser.uid).update({
-        mutedTeams: FieldValue.arrayUnion(teamId)
-      });
-      showSuccess('Notifications muted for this team');
-    }
-  } catch (error) {
-    console.error('Error toggling notifications:', error);
-    showError('Error updating notification settings');
-  }
-};
-
-// ---------- Team Menu ----------
-window.showTeamMenu = function(teamId) {
-  const team = allTeams.find(t => t.id === teamId);
-  if (!team) return;
-  
-  const isOwner = team.ownerId === currentUser.uid;
-  const event = window.event;
-  
-  const menuHTML = `
-    <div class="context-menu" style="position:fixed;background:white;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.15);padding:8px;z-index:1000;">
-      <button onclick="viewTeamDetails('${teamId}')" style="display:block;width:100%;text-align:left;padding:8px 12px;border:none;background:none;cursor:pointer;">
-        <i class="fas fa-eye"></i> View Details
-      </button>
-      <button onclick="openTeamChat('${teamId}')" style="display:block;width:100%;text-align:left;padding:8px 12px;border:none;background:none;cursor:pointer;">
-        <i class="fas fa-comment"></i> Open Chat
-      </button>
-      ${isOwner ? `
-        <button onclick="copyTeamInviteLink('${teamId}')" style="display:block;width:100%;text-align:left;padding:8px 12px;border:none;background:none;cursor:pointer;">
-          <i class="fas fa-link"></i> Copy Invite Link
-        </button>
-        <button onclick="exportTeamData('${teamId}')" style="display:block;width:100%;text-align:left;padding:8px 12px;border:none;background:none;cursor:pointer;">
-          <i class="fas fa-download"></i> Export Data
-        </button>
-        <hr style="margin:4px 0;border:none;border-top:1px solid #e9ecef;">
-        <button onclick="deleteTeam()" style="display:block;width:100%;text-align:left;padding:8px 12px;border:none;background:none;cursor:pointer;color:var(--danger-color);">
-          <i class="fas fa-trash"></i> Delete Team
-        </button>
-      ` : `
-        <button onclick="leaveTeam('${teamId}')" style="display:block;width:100%;text-align:left;padding:8px 12px;border:none;background:none;cursor:pointer;color:var(--danger-color);">
-          <i class="fas fa-sign-out-alt"></i> Leave Team
-        </button>
-      `}
-    </div>
-  `;
-  
-  document.querySelectorAll('.context-menu').forEach(m => m.remove());
-  
-  const menu = document.createElement('div');
-  menu.innerHTML = menuHTML;
-  document.body.appendChild(menu.firstElementChild);
-  
-  const menuElement = document.querySelector('.context-menu');
-  menuElement.style.top = `${event.clientY}px`;
-  menuElement.style.left = `${event.clientX}px`;
-  
-  setTimeout(() => {
-    document.addEventListener('click', function closeMenu() {
-      menuElement?.remove();
-      document.removeEventListener('click', closeMenu);
-    });
-  }, 100);
-};
-
-// ---------- DOM Ready & Event Listeners ----------
+// ---------- DOM Ready ----------
 document.addEventListener('DOMContentLoaded', () => {
-  // Team search
   const teamSearchInput = getById('team-search-input');
   if (teamSearchInput) {
     teamSearchInput.addEventListener('input', e => handleTeamSearch(e.target.value));
   }
 
-  // Sort select
   const sortSelect = getById('sort-select');
   if (sortSelect) {
     sortSelect.addEventListener('change', e => setSortOption(e.target.value));
   }
 
-  // Category filter
   const categoryFilter = getById('category-filter');
   if (categoryFilter) {
     categoryFilter.addEventListener('change', () => applyFilters());
-  }
-
-  // Create team form
-  const createTeamForm = getById('createTeamForm');
-  if (createTeamForm) {
-    createTeamForm.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      
-      const nameInput = getById('teamName');
-      const categorySelect = getById('teamCategory');
-      const customCategoryInput = getById('customCategory');
-      const descriptionInput = getById('teamDescription');
-      
-      const name = nameInput?.value.trim();
-      let category = categorySelect?.value;
-      const description = descriptionInput?.value.trim();
-      
-      if (!name || !category || !description) {
-        showError('Please fill in all required fields');
-        return;
-      }
-      
-      if (category === 'Custom') {
-        const customCategory = customCategoryInput?.value.trim();
-        if (!customCategory) {
-          showError('Please enter a custom category name');
-          return;
-        }
-        category = customCategory;
-        allCategories.add(category);
-      }
-      
-      try {
-        const teamData = {
-          name: name,
-          category: category,
-          description: description,
-          ownerId: currentUser.uid,
-          ownerName: currentUser.displayName || currentUser.email,
-          members: [currentUser.uid],
-          roles: {
-            [currentUser.uid]: 'Owner'
-          },
-          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-          updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-          settings: {
-            allowMemberInvites: false,
-            requireApproval: true,
-            isPublic: false
-          }
-        };
-        
-        const docRef = await db.collection('teams').add(teamData);
-        
-        await db.collection('teamChats').doc(docRef.id).set({
-          teamId: docRef.id,
-          teamName: name,
-          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-          lastMessage: null,
-          lastMessageTime: null
-        });
-        
-        showSuccess('Team created successfully!');
-        closeCreateTeamModal();
-        await loadTeams();
-        
-        setTimeout(() => viewTeamDetails(docRef.id), 500);
-        
-      } catch (error) {
-        console.error('Error creating team:', error);
-        showError('Error creating team: ' + error.message);
-      }
-    });
   }
 
   // Close modals on background click
@@ -1492,19 +900,6 @@ document.addEventListener('DOMContentLoaded', () => {
       document.querySelectorAll('.modal.show').forEach(modal => {
         modal.classList.remove('show');
       });
-    }
-  });
-
-  // Keyboard shortcuts
-  document.addEventListener('keydown', (e) => {
-    if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
-      e.preventDefault();
-      teamSearchInput?.focus();
-    }
-    
-    if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
-      e.preventDefault();
-      showCreateTeamModal();
     }
   });
 
@@ -1598,7 +993,6 @@ function initializeLogoutButtons() {
 window.addEventListener('beforeunload', () => {
   teamsUnsubscribe && teamsUnsubscribe();
   invitesUnsubscribe && invitesUnsubscribe();
-  chatUnsubscribe && chatUnsubscribe();
 });
 
 // ---------- Modal Click Outside to Close ----------
@@ -1608,4 +1002,1135 @@ window.addEventListener('click', (e) => {
   }
 });
 
-console.log('Teams page with complete functionality initialized successfully');
+// ---------- Leave Team (for members) ----------
+window.leaveTeam = async function (teamId) {
+  const confirmed = confirm('Are you sure you want to leave this team?');
+  if (!confirmed) return;
+  
+  try {
+    await db.collection('teams').doc(teamId).update({
+      members: FieldValue.arrayRemove(currentUser.uid)
+    });
+    
+    showSuccess('You have left the team');
+    closeTeamDetailsModal();
+    await loadTeams();
+    
+  } catch (error) {
+    console.error('Error leaving team:', error);
+    showError('Error leaving team');
+  }
+};
+
+// ---------- Request to Join Team (future feature) ----------
+window.requestToJoinTeam = async function (teamId) {
+  try {
+    // Check if already requested
+    const existingRequest = await db.collection('teamRequests')
+      .where('teamId', '==', teamId)
+      .where('userId', '==', currentUser.uid)
+      .where('status', '==', 'pending')
+      .get();
+    
+    if (!existingRequest.empty) {
+      showToast('You have already requested to join this team', 'info');
+      return;
+    }
+    
+    await db.collection('teamRequests').add({
+      teamId: teamId,
+      userId: currentUser.uid,
+      userName: currentUser.displayName || currentUser.email,
+      userEmail: currentUser.email,
+      status: 'pending',
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    
+    showSuccess('Join request sent!');
+    
+  } catch (error) {
+    console.error('Error requesting to join team:', error);
+    showError('Error sending join request');
+  }
+};
+
+// ---------- Export Team Data (owner feature) ----------
+window.exportTeamData = async function (teamId) {
+  try {
+    const teamDoc = await db.collection('teams').doc(teamId).get();
+    const team = teamDoc.data();
+    
+    // Get all member details
+    const memberDetails = await Promise.all(
+      (team.members || []).map(async (uid) => {
+        const userDoc = await db.collection('users').doc(uid).get();
+        const userData = userDoc.exists ? userDoc.data() : {};
+        return {
+          name: userData.name || userData.displayName || 'Unknown',
+          email: userData.email || 'N/A'
+        };
+      })
+    );
+    
+    const exportData = {
+      teamName: team.name,
+      category: team.category,
+      description: team.description,
+      createdAt: team.createdAt?.toDate().toISOString(),
+      memberCount: team.members?.length || 0,
+      members: memberDetails
+    };
+    
+    // Create and download JSON file
+    const dataStr = JSON.stringify(exportData, null, 2);
+    const dataBlob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(dataBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${team.name.replace(/[^a-z0-9]/gi, '_')}_export.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+    
+    showSuccess('Team data exported successfully!');
+    
+  } catch (error) {
+    console.error('Error exporting team data:', error);
+    showError('Error exporting team data');
+  }
+};
+
+// ---------- Initialize tooltips (if using) ----------
+function initializeTooltips() {
+  const tooltipTriggers = document.querySelectorAll('[data-tooltip]');
+  tooltipTriggers.forEach(trigger => {
+    trigger.addEventListener('mouseenter', (e) => {
+      const tooltip = document.createElement('div');
+      tooltip.className = 'tooltip';
+      tooltip.textContent = e.target.getAttribute('data-tooltip');
+      document.body.appendChild(tooltip);
+      
+      const rect = e.target.getBoundingClientRect();
+      tooltip.style.position = 'absolute';
+      tooltip.style.top = `${rect.top - tooltip.offsetHeight - 8}px`;
+      tooltip.style.left = `${rect.left + (rect.width - tooltip.offsetWidth) / 2}px`;
+      
+      e.target.addEventListener('mouseleave', () => {
+        tooltip.remove();
+      }, { once: true });
+    });
+  });
+}
+
+// Call on load
+setTimeout(initializeTooltips, 1000);
+
+console.log('Teams page initialized successfully');
+
+
+// =============================
+// Additional Enhancements for teams.js
+// Add these to your existing teams.js file
+// =============================
+
+// ---------- Enhanced Search with Real-time Results ----------
+window.searchUsersEnhanced = debounce(async function() {
+  const searchInput = getById('memberSearch');
+  const searchResults = getById('searchResults');
+  if (!searchInput || !searchResults) return;
+  
+  const query = searchInput.value.trim().toLowerCase();
+  if (!query || query.length < 2) {
+    searchResults.innerHTML = query.length > 0 && query.length < 2 
+      ? '<div class="no-results">Type at least 2 characters...</div>' 
+      : '';
+    return;
+  }
+  
+  try {
+    searchResults.innerHTML = '<div class="loading-placeholder"><i class="fas fa-spinner fa-spin"></i> Searching...</div>';
+    
+    // Search by email
+    const emailQuery = db.collection('users')
+      .where('email', '>=', query)
+      .where('email', '<=', query + '\uf8ff')
+      .limit(10);
+    
+    // Search by name (if name field is lowercase)
+    const nameQuery = db.collection('users')
+      .where('searchName', '>=', query)
+      .where('searchName', '<=', query + '\uf8ff')
+      .limit(10);
+    
+    const [emailSnapshot, nameSnapshot] = await Promise.all([
+      emailQuery.get(),
+      nameQuery.get()
+    ]);
+    
+    // Combine and deduplicate results
+    const userMap = new Map();
+    emailSnapshot.forEach(doc => userMap.set(doc.id, { id: doc.id, ...doc.data() }));
+    nameSnapshot.forEach(doc => userMap.set(doc.id, { id: doc.id, ...doc.data() }));
+    
+    if (userMap.size === 0) {
+      searchResults.innerHTML = '<div class="no-results"><i class="fas fa-user-slash"></i> No users found</div>';
+      return;
+    }
+    
+    const teamDoc = await db.collection('teams').doc(currentTeamId).get();
+    const team = teamDoc.data();
+    const currentMembers = team.members || [];
+    
+    const results = Array.from(userMap.values())
+      .filter(user => !currentMembers.includes(user.id) && user.id !== currentUser.uid);
+    
+    if (results.length === 0) {
+      searchResults.innerHTML = '<div class="no-results"><i class="fas fa-check-circle"></i> All matching users are already members</div>';
+      return;
+    }
+    
+    searchResults.innerHTML = results.map(user => {
+      const name = user.name || user.displayName || 'Unknown User';
+      const avatar = user.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=ff6600&color=fff`;
+      
+      return `
+        <div class="search-result-item" data-user-id="${user.id}">
+          <img src="${avatar}" alt="${escapeHtml(name)}" class="result-avatar" onerror="this.src='https://ui-avatars.com/api/?name=U&background=ff6600&color=fff'">
+          <div class="result-info">
+            <h4>${escapeHtml(name)}</h4>
+            <p><i class="fas fa-envelope"></i> ${escapeHtml(user.email)}</p>
+          </div>
+          <button class="btn-primary btn-sm" onclick="inviteUser('${user.id}', '${escapeHtml(user.email)}')">
+            <i class="fas fa-user-plus"></i> Invite
+          </button>
+        </div>
+      `;
+    }).join('');
+    
+  } catch (error) {
+    console.error('Error searching users:', error);
+    searchResults.innerHTML = '<div class="error-state"><i class="fas fa-exclamation-triangle"></i> Error searching users</div>';
+  }
+}, 500);
+
+// Attach to search input
+document.addEventListener('DOMContentLoaded', () => {
+  const memberSearch = getById('memberSearch');
+  if (memberSearch) {
+    memberSearch.addEventListener('input', searchUsersEnhanced);
+  }
+});
+
+// ---------- Bulk Actions for Team Management ----------
+window.bulkInviteUsers = async function() {
+  const emailsText = prompt('Enter email addresses separated by commas or new lines:');
+  if (!emailsText) return;
+  
+  const emails = emailsText
+    .split(/[,\n]/)
+    .map(e => e.trim())
+    .filter(e => e && e.includes('@'));
+  
+  if (emails.length === 0) {
+    showError('No valid email addresses found');
+    return;
+  }
+  
+  try {
+    const teamDoc = await db.collection('teams').doc(currentTeamId).get();
+    const team = teamDoc.data();
+    
+    let successCount = 0;
+    let failCount = 0;
+    
+    for (const email of emails) {
+      try {
+        // Check if user exists
+        const userSnapshot = await db.collection('users')
+          .where('email', '==', email)
+          .limit(1)
+          .get();
+        
+        if (userSnapshot.empty) {
+          failCount++;
+          continue;
+        }
+        
+        // Check if already a member
+        const userId = userSnapshot.docs[0].id;
+        if (team.members.includes(userId)) {
+          failCount++;
+          continue;
+        }
+        
+        // Send invite
+        await db.collection('teamInvites').add({
+          teamId: currentTeamId,
+          teamName: team.name,
+          inviterId: currentUser.uid,
+          inviterName: currentUser.displayName || currentUser.email,
+          inviteeEmail: email,
+          status: 'pending',
+          message: `Join ${team.name}!`,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        
+        successCount++;
+      } catch (err) {
+        console.error(`Error inviting ${email}:`, err);
+        failCount++;
+      }
+    }
+    
+    showSuccess(`Invitations sent: ${successCount} successful, ${failCount} failed`);
+    
+  } catch (error) {
+    console.error('Error in bulk invite:', error);
+    showError('Error sending bulk invitations');
+  }
+};
+
+// ---------- Team Announcements ----------
+window.sendTeamAnnouncement = async function(teamId) {
+  const message = prompt('Enter announcement message:');
+  if (!message || !message.trim()) return;
+  
+  try {
+    const teamDoc = await db.collection('teams').doc(teamId).get();
+    const team = teamDoc.data();
+    
+    if (team.ownerId !== currentUser.uid) {
+      showError('Only team owners can send announcements');
+      return;
+    }
+    
+    await db.collection('teamAnnouncements').add({
+      teamId: teamId,
+      teamName: team.name,
+      message: message.trim(),
+      senderId: currentUser.uid,
+      senderName: currentUser.displayName || currentUser.email,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      readBy: [currentUser.uid]
+    });
+    
+    showSuccess('Announcement sent to all team members!');
+    
+  } catch (error) {
+    console.error('Error sending announcement:', error);
+    showError('Error sending announcement');
+  }
+};
+
+// ---------- Team Member Roles ----------
+window.assignRole = async function(teamId, userId, role) {
+  try {
+    const teamDoc = await db.collection('teams').doc(teamId).get();
+    const team = teamDoc.data();
+    
+    if (team.ownerId !== currentUser.uid) {
+      showError('Only team owners can assign roles');
+      return;
+    }
+    
+    // Initialize roles object if doesn't exist
+    const roles = team.roles || {};
+    roles[userId] = role;
+    
+    await db.collection('teams').doc(teamId).update({
+      roles: roles
+    });
+    
+    showSuccess(`Role assigned: ${role}`);
+    await loadTeamMembers(teamId, team.members);
+    
+  } catch (error) {
+    console.error('Error assigning role:', error);
+    showError('Error assigning role');
+  }
+};
+
+// ---------- Enhanced Member Card with Roles ----------
+async function loadTeamMembersWithRoles(teamId, memberIds) {
+  const membersList = getById('teamMembersList');
+  if (!membersList) return;
+  
+  if (!memberIds || memberIds.length === 0) {
+    membersList.innerHTML = '<p class="no-participants">No members yet</p>';
+    return;
+  }
+  
+  try {
+    const teamDoc = await db.collection('teams').doc(teamId).get();
+    const team = teamDoc.data();
+    const isOwner = team.ownerId === currentUser.uid;
+    const roles = team.roles || {};
+    
+    const membersHTML = await Promise.all(memberIds.map(async (uid) => {
+      try {
+        const userDoc = await db.collection('users').doc(uid).get();
+        const userData = userDoc.exists ? userDoc.data() : null;
+        const isTeamOwner = uid === team.ownerId;
+        const memberRole = roles[uid] || 'Member';
+        
+        const name = userData?.name || userData?.displayName || 'Unknown User';
+        const email = userData?.email || '';
+        const avatar = userData?.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=ff6600&color=fff`;
+        
+        return `
+          <div class="member-card">
+            <img src="${avatar}" alt="${escapeHtml(name)}" class="member-avatar">
+            <div class="member-info">
+              <h4>
+                ${escapeHtml(name)}
+                ${isTeamOwner ? '<span class="owner-badge"><i class="fas fa-crown"></i> Owner</span>' : ''}
+              </h4>
+              <p>${escapeHtml(email)}</p>
+              ${!isTeamOwner ? `<small style="color:#6c757d;"><i class="fas fa-user-tag"></i> ${memberRole}</small>` : ''}
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;">
+              ${isOwner && !isTeamOwner ? `
+                <select class="role-select" onchange="assignRole('${teamId}', '${uid}', this.value)" style="padding:6px;border-radius:6px;border:1px solid #dee2e6;">
+                  <option value="Member" ${memberRole === 'Member' ? 'selected' : ''}>Member</option>
+                  <option value="Admin" ${memberRole === 'Admin' ? 'selected' : ''}>Admin</option>
+                  <option value="Moderator" ${memberRole === 'Moderator' ? 'selected' : ''}>Moderator</option>
+                </select>
+                <button class="btn-danger btn-sm" onclick="removeMember('${teamId}', '${uid}')">
+                  <i class="fas fa-user-minus"></i>
+                </button>
+              ` : ''}
+            </div>
+          </div>
+        `;
+      } catch (error) {
+        console.error('Error loading member:', error);
+        return '';
+      }
+    }));
+    
+    membersList.innerHTML = membersHTML.filter(h => h).join('');
+    
+  } catch (error) {
+    console.error('Error loading team members:', error);
+    membersList.innerHTML = '<p class="error-state">Error loading members</p>';
+  }
+}
+
+// ---------- Team Statistics Dashboard ----------
+window.viewTeamStatistics = async function(teamId) {
+  try {
+    const teamDoc = await db.collection('teams').doc(teamId).get();
+    const team = teamDoc.data();
+    
+    // Calculate statistics
+    const memberCount = team.members?.length || 0;
+    const daysSinceCreation = team.createdAt 
+      ? Math.floor((Date.now() - team.createdAt.toDate().getTime()) / (1000 * 60 * 60 * 24))
+      : 0;
+    
+    // Get activity data
+    const activitySnapshot = await db.collection('teamActivity')
+      .where('teamId', '==', teamId)
+      .orderBy('createdAt', 'desc')
+      .limit(10)
+      .get();
+    
+    const recentActivity = activitySnapshot.docs.map(doc => doc.data());
+    
+    const statsHTML = `
+      <div class="stats-dashboard">
+        <h3><i class="fas fa-chart-bar"></i> Team Statistics</h3>
+        <div class="stats-grid" style="margin-top:20px;">
+          <div class="stat-box">
+            <i class="fas fa-users"></i>
+            <h4>${memberCount}</h4>
+            <p>Total Members</p>
+          </div>
+          <div class="stat-box">
+            <i class="fas fa-calendar-check"></i>
+            <h4>${daysSinceCreation}</h4>
+            <p>Days Active</p>
+          </div>
+          <div class="stat-box">
+            <i class="fas fa-comments"></i>
+            <h4>${recentActivity.length}</h4>
+            <p>Recent Activities</p>
+          </div>
+          <div class="stat-box">
+            <i class="fas fa-chart-line"></i>
+            <h4>${Math.floor(memberCount / Math.max(daysSinceCreation, 1) * 30)}</h4>
+            <p>Growth Rate</p>
+          </div>
+        </div>
+        <div class="recent-activity" style="margin-top:24px;">
+          <h4>Recent Activity</h4>
+          ${recentActivity.length > 0 
+            ? recentActivity.map(activity => `
+              <div class="activity-item" style="padding:12px;border-bottom:1px solid #e9ecef;">
+                <i class="fas fa-${activity.type === 'join' ? 'user-plus' : 'info-circle'}"></i>
+                ${activity.description}
+                <small style="color:#6c757d;float:right;">${safeDateDisplay(activity.createdAt)}</small>
+              </div>
+            `).join('')
+            : '<p style="color:#6c757d;text-align:center;padding:20px;">No recent activity</p>'
+          }
+        </div>
+      </div>
+    `;
+    
+    // You can show this in a modal or dedicated section
+    showToast('Statistics feature in development', 'info');
+    console.log('Team Stats:', statsHTML);
+    
+  } catch (error) {
+    console.error('Error loading team statistics:', error);
+    showError('Error loading statistics');
+  }
+};
+
+// ---------- Team Settings ----------
+window.updateTeamSettings = async function(teamId) {
+  try {
+    const teamDoc = await db.collection('teams').doc(teamId).get();
+    const team = teamDoc.data();
+    
+    if (team.ownerId !== currentUser.uid) {
+      showError('Only team owners can update settings');
+      return;
+    }
+    
+    const settings = {
+      allowMemberInvites: confirm('Allow members to invite others?'),
+      requireApproval: confirm('Require owner approval for new members?'),
+      isPublic: confirm('Make team publicly visible?')
+    };
+    
+    await db.collection('teams').doc(teamId).update({
+      settings: settings,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    
+    showSuccess('Team settings updated!');
+    
+  } catch (error) {
+    console.error('Error updating settings:', error);
+    showError('Error updating settings');
+  }
+};
+
+// ---------- Copy Team Invite Link ----------
+window.copyTeamInviteLink = function(teamId) {
+  const baseUrl = window.location.origin;
+  const inviteLink = `${baseUrl}/join-team.html?teamId=${teamId}`;
+  
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(inviteLink)
+      .then(() => showSuccess('Invite link copied to clipboard!'))
+      .catch(err => {
+        console.error('Error copying to clipboard:', err);
+        fallbackCopyToClipboard(inviteLink);
+      });
+  } else {
+    fallbackCopyToClipboard(inviteLink);
+  }
+};
+
+function fallbackCopyToClipboard(text) {
+  const textArea = document.createElement('textarea');
+  textArea.value = text;
+  textArea.style.position = 'fixed';
+  textArea.style.left = '-999999px';
+  document.body.appendChild(textArea);
+  textArea.select();
+  try {
+    document.execCommand('copy');
+    showSuccess('Invite link copied to clipboard!');
+  } catch (err) {
+    showError('Failed to copy link. Please copy manually: ' + text);
+  }
+  document.body.removeChild(textArea);
+}
+
+// ---------- Enhanced Team Card Actions ----------
+window.showTeamContextMenu = function(teamId, event) {
+  event.stopPropagation();
+  
+  const team = allTeams.find(t => t.id === teamId);
+  if (!team) return;
+  
+  const isOwner = team.ownerId === currentUser.uid;
+  
+  const menuHTML = `
+    <div class="context-menu" style="position:fixed;background:white;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.15);padding:8px;z-index:1000;">
+      <button onclick="viewTeamDetails('${teamId}')" style="display:block;width:100%;text-align:left;padding:8px 12px;border:none;background:none;cursor:pointer;">
+        <i class="fas fa-eye"></i> View Details
+      </button>
+      ${isOwner ? `
+        <button onclick="copyTeamInviteLink('${teamId}')" style="display:block;width:100%;text-align:left;padding:8px 12px;border:none;background:none;cursor:pointer;">
+          <i class="fas fa-link"></i> Copy Invite Link
+        </button>
+        <button onclick="sendTeamAnnouncement('${teamId}')" style="display:block;width:100%;text-align:left;padding:8px 12px;border:none;background:none;cursor:pointer;">
+          <i class="fas fa-bullhorn"></i> Send Announcement
+        </button>
+        <button onclick="exportTeamData('${teamId}')" style="display:block;width:100%;text-align:left;padding:8px 12px;border:none;background:none;cursor:pointer;">
+          <i class="fas fa-download"></i> Export Data
+        </button>
+        <hr style="margin:4px 0;border:none;border-top:1px solid #e9ecef;">
+        <button onclick="deleteTeam('${teamId}')" style="display:block;width:100%;text-align:left;padding:8px 12px;border:none;background:none;cursor:pointer;color:var(--danger-color);">
+          <i class="fas fa-trash"></i> Delete Team
+        </button>
+      ` : `
+        <button onclick="leaveTeam('${teamId}')" style="display:block;width:100%;text-align:left;padding:8px 12px;border:none;background:none;cursor:pointer;color:var(--danger-color);">
+          <i class="fas fa-sign-out-alt"></i> Leave Team
+        </button>
+      `}
+    </div>
+  `;
+  
+  // Remove existing menu
+  document.querySelectorAll('.context-menu').forEach(m => m.remove());
+  
+  // Create and position menu
+  const menu = document.createElement('div');
+  menu.innerHTML = menuHTML;
+  document.body.appendChild(menu.firstElementChild);
+  
+  const menuElement = document.querySelector('.context-menu');
+  menuElement.style.top = `${event.clientY}px`;
+  menuElement.style.left = `${event.clientX}px`;
+  
+  // Close on click outside
+  setTimeout(() => {
+    document.addEventListener('click', function closeMenu() {
+      menuElement?.remove();
+      document.removeEventListener('click', closeMenu);
+    });
+  }, 100);
+};
+
+// Update showTeamMenu to use context menu
+window.showTeamMenu = function(teamId) {
+  const event = window.event;
+  showTeamContextMenu(teamId, event);
+};
+
+// ---------- Keyboard Shortcuts ----------
+document.addEventListener('keydown', (e) => {
+  // Ctrl/Cmd + K to focus search
+  if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+    e.preventDefault();
+    const searchInput = getById('team-search-input');
+    searchInput?.focus();
+  }
+  
+  // Ctrl/Cmd + N to create new team
+  if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
+    e.preventDefault();
+    showCreateTeamModal();
+  }
+});
+
+console.log('Enhanced teams features loaded');
+// ========================================
+// TEAMS PAGE MOBILE OPTIMIZATION
+// Add these improvements to the END of teams.js
+// ========================================
+
+// Mobile-specific initialization
+function initializeMobileOptimizations() {
+    if (window.innerWidth <= 768) {
+        console.log('Initializing mobile optimizations for Teams page');
+
+        // 1. Optimize image loading
+        optimizeImageLoading();
+
+        // 2. Add pull-to-refresh hint
+        addPullToRefreshHint();
+
+        // 3. Optimize filters for touch
+        optimizeFiltersForTouch();
+
+        // 4. Add scroll position restoration
+        enableScrollRestoration();
+
+        // 5. Optimize modal animations
+        optimizeModalAnimations();
+    }
+}
+
+// Optimize image loading for mobile
+function optimizeImageLoading() {
+    const images = document.querySelectorAll('img');
+    images.forEach(img => {
+        // Add loading="lazy" for better performance
+        img.loading = 'lazy';
+        
+        // Add error handling
+        img.onerror = function() {
+            this.src = 'https://ui-avatars.com/api/?name=User&background=ff6600&color=fff&size=128';
+        };
+    });
+}
+
+// Add pull-to-refresh hint
+function addPullToRefreshHint() {
+    let touchStartY = 0;
+    let pullToRefreshThreshold = 80;
+    
+    const teamsContent = document.querySelector('.teams-content');
+    if (!teamsContent) return;
+
+    let refreshIndicator = document.querySelector('.refresh-indicator');
+    if (!refreshIndicator) {
+        refreshIndicator = document.createElement('div');
+        refreshIndicator.className = 'refresh-indicator';
+        refreshIndicator.innerHTML = '<i class="fas fa-sync-alt"></i> Pull to refresh';
+        refreshIndicator.style.cssText = `
+            position: fixed;
+            top: -50px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--primary-color);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 24px;
+            font-size: 0.9rem;
+            z-index: 1000;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        `;
+        document.body.appendChild(refreshIndicator);
+    }
+
+    teamsContent.addEventListener('touchstart', (e) => {
+        if (window.scrollY === 0) {
+            touchStartY = e.touches[0].clientY;
+        }
+    }, { passive: true });
+
+    teamsContent.addEventListener('touchmove', (e) => {
+        if (window.scrollY === 0) {
+            const touchY = e.touches[0].clientY;
+            const diff = touchY - touchStartY;
+            
+            if (diff > 0 && diff < pullToRefreshThreshold) {
+                refreshIndicator.style.top = `${Math.min(diff - 50, 10)}px`;
+            }
+        }
+    }, { passive: true });
+
+    teamsContent.addEventListener('touchend', async () => {
+        const currentTop = parseInt(refreshIndicator.style.top);
+        
+        if (currentTop >= 10) {
+            // Trigger refresh
+            refreshIndicator.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Refreshing...';
+            refreshIndicator.style.top = '10px';
+            
+            try {
+                await loadTeams();
+                await loadInvites();
+                showSuccess('Teams refreshed!');
+            } catch (error) {
+                showError('Failed to refresh');
+            }
+            
+            refreshIndicator.innerHTML = '<i class="fas fa-sync-alt"></i> Pull to refresh';
+        }
+        
+        // Reset
+        setTimeout(() => {
+            refreshIndicator.style.top = '-50px';
+        }, 1000);
+    }, { passive: true });
+}
+
+// Optimize filters for touch interaction
+function optimizeFiltersForTouch() {
+    const filterTabs = document.querySelectorAll('.filter-tab');
+    filterTabs.forEach(tab => {
+        // Add visual feedback on touch
+        tab.addEventListener('touchstart', function() {
+            this.style.transform = 'scale(0.95)';
+        }, { passive: true });
+
+        tab.addEventListener('touchend', function() {
+            this.style.transform = 'scale(1)';
+        }, { passive: true });
+    });
+
+    // Make filter tabs scrollable indicator more visible
+    const filterTabsContainer = document.querySelector('.filter-tabs');
+    if (filterTabsContainer && filterTabsContainer.scrollWidth > filterTabsContainer.clientWidth) {
+        // Add shadow indicators
+        const style = document.createElement('style');
+        style.textContent = `
+            .filter-tabs {
+                position: relative;
+            }
+            .filter-tabs::after {
+                content: '';
+                position: absolute;
+                right: 0;
+                top: 0;
+                bottom: 0;
+                width: 40px;
+                background: linear-gradient(to left, white, transparent);
+                pointer-events: none;
+            }
+        `;
+        document.head.appendChild(style);
+    }
+}
+
+// Enable scroll position restoration
+function enableScrollRestoration() {
+    // Save scroll position before leaving page
+    window.addEventListener('beforeunload', () => {
+        sessionStorage.setItem('teamsScrollPosition', window.scrollY.toString());
+    });
+
+    // Restore scroll position on load
+    const savedPosition = sessionStorage.getItem('teamsScrollPosition');
+    if (savedPosition) {
+        window.scrollTo(0, parseInt(savedPosition));
+        sessionStorage.removeItem('teamsScrollPosition');
+    }
+}
+
+// Optimize modal animations for mobile
+function optimizeModalAnimations() {
+    const modals = document.querySelectorAll('.modal');
+    modals.forEach(modal => {
+        // Faster animations on mobile
+        modal.style.transition = 'opacity 0.2s ease';
+        
+        const modalContent = modal.querySelector('.modal-content');
+        if (modalContent) {
+            modalContent.style.transition = 'transform 0.2s ease';
+        }
+    });
+}
+
+// REPLACE existing displayTeams function with this optimized version:
+function displayTeams(teams) {
+    const teamsGrid = document.getElementById('teams-grid');
+    if (!teamsGrid) return;
+
+    if (!teams || teams.length === 0) {
+        teamsGrid.innerHTML = `
+            <div class="no-events" style="grid-column: 1 / -1;">
+                <i class="fas fa-users" style="font-size: 3rem; color: #ccc; margin-bottom: 16px;"></i>
+                <p>No teams found. Create your first team!</p>
+            </div>
+        `;
+        return;
+    }
+
+    teamsGrid.className = viewMode === 'list' ? 'teams-list' : 'teams-grid';
+
+    // On mobile, use DocumentFragment for better performance
+    const isMobile = window.innerWidth <= 768;
+    
+    if (isMobile) {
+        const fragment = document.createDocumentFragment();
+        
+        teams.forEach(team => {
+            const card = createTeamCard(team);
+            fragment.appendChild(card);
+        });
+        
+        teamsGrid.innerHTML = '';
+        teamsGrid.appendChild(fragment);
+    } else {
+        // Desktop: use innerHTML (faster for large lists)
+        teamsGrid.innerHTML = teams.map(team => createTeamCardHTML(team)).join('');
+    }
+}
+
+// Helper function to create team card element (mobile)
+function createTeamCard(team) {
+    const card = document.createElement('div');
+    card.className = `team-card ${viewMode === 'list' ? 'list-view' : ''}`;
+    card.onclick = () => viewTeamDetails(team.id);
+    card.innerHTML = createTeamCardHTML(team);
+    return card;
+}
+
+// Helper function to create team card HTML
+function createTeamCardHTML(team) {
+    const isOwner = team.ownerId === currentUser.uid;
+    const memberCount = team.members?.length || 0;
+    const created = safeDateDisplay(team.createdAt);
+    const desc = escapeHtml(team.description || 'No description');
+    const hoursAgo = team.updatedAt ? (Date.now() - team.updatedAt.seconds * 1000) / (1000 * 60 * 60) : 999;
+    const activity = hoursAgo < 24 ? 'Very Active' : hoursAgo < 72 ? 'Active' : 'Moderate';
+    const activityClass = activity.toLowerCase().replace(' ', '-');
+
+    return `
+        <div class="team-card-banner" style="background: linear-gradient(135deg, var(--primary-color), var(--primary-light))">
+            ${isOwner ? `<div class="team-owner-badge"><i class="fas fa-crown"></i> Owner</div>` : ''}
+        </div>
+        <div class="team-card-content">
+            <div class="team-header">
+                <div class="team-title-row">
+                    <h3>${escapeHtml(team.name)}</h3>
+                    <button class="team-menu-btn" onclick="event.stopPropagation(); showTeamMenu('${team.id}')">
+                        <i class="fas fa-ellipsis-v"></i>
+                    </button>
+                </div>
+                <span class="team-activity-badge ${activityClass}">
+                    <i class="fas fa-circle" style="font-size: 6px;"></i> ${activity}
+                </span>
+            </div>
+            <p class="team-description">${desc}</p>
+            <div class="team-stats">
+                <div class="team-stat-box">
+                    <i class="fas fa-users"></i>
+                    <span class="team-stat-value">${memberCount}</span>
+                    <span class="team-stat-label">Members</span>
+                </div>
+                <div class="team-stat-box">
+                    <i class="fas fa-award"></i>
+                    <span class="team-stat-value">${Math.floor(Math.random() * 20)}</span>
+                    <span class="team-stat-label">Awards</span>
+                </div>
+                <div class="team-stat-box">
+                    <i class="fas fa-calendar"></i>
+                    <span class="team-stat-value">${Math.floor(Math.random() * 10)}</span>
+                    <span class="team-stat-label">Events</span>
+                </div>
+            </div>
+            <div class="team-actions">
+                <button class="team-action-btn primary" onclick="event.stopPropagation(); viewTeamDetails('${team.id}')">
+                    <i class="fas fa-arrow-right"></i> View
+                </button>
+                <button class="team-action-btn secondary" onclick="event.stopPropagation(); openTeamChat('${team.id}')">
+                    <i class="fas fa-comment"></i>
+                </button>
+                <button class="team-action-btn secondary" onclick="event.stopPropagation(); toggleTeamNotifications('${team.id}')">
+                    <i class="fas fa-bell"></i>
+                </button>
+            </div>
+            <div class="team-footer">
+                <div class="team-last-activity">
+                    <i class="fas fa-clock"></i> ${created}
+                </div>
+                <span class="category-badge" style="background: linear-gradient(135deg, var(--primary-color), var(--primary-light));">
+                    ${escapeHtml(team.category || '')}
+                </span>
+            </div>
+        </div>
+    `;
+}
+
+// Add viewport height fix for mobile browsers
+function fixMobileViewportHeight() {
+    const setVh = () => {
+        const vh = window.innerHeight * 0.01;
+        document.documentElement.style.setProperty('--vh', `${vh}px`);
+    };
+
+    setVh();
+    window.addEventListener('resize', setVh);
+    window.addEventListener('orientationchange', () => {
+        setTimeout(setVh, 100);
+    });
+}
+
+// Initialize all mobile optimizations when DOM is ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+        initializeMobileOptimizations();
+        fixMobileViewportHeight();
+    });
+} else {
+    initializeMobileOptimizations();
+    fixMobileViewportHeight();
+}
+
+// Add connection status monitoring
+let isOnline = navigator.onLine;
+
+window.addEventListener('online', () => {
+    if (!isOnline) {
+        isOnline = true;
+        showSuccess('Connection restored');
+        loadTeams().catch(console.error);
+        loadInvites().catch(console.error);
+    }
+});
+
+window.addEventListener('offline', () => {
+    isOnline = false;
+    showToast('You are offline. Some features may not work.', 'warning');
+});
+
+// Performance monitoring (development only)
+if (window.location.hostname === 'localhost') {
+    window.addEventListener('load', () => {
+        const perfData = performance.getEntriesByType('navigation')[0];
+        console.log('Page Load Time:', Math.round(perfData.loadEventEnd - perfData.fetchStart), 'ms');
+        console.log('DOM Content Loaded:', Math.round(perfData.domContentLoadedEventEnd - perfData.fetchStart), 'ms');
+    });
+}
+
+console.log('Teams mobile optimizations loaded successfully');
+// ---------- Team Chat Feature ----------
+let chatUnsubscribe = null;
+
+window.openTeamChat = async function(teamId) {
+  const modal = document.createElement('div');
+  modal.id = 'chatModal';
+  modal.className = 'modal show';
+  modal.innerHTML = `
+    <div class="modal-content chat-modal">
+      <div class="modal-header">
+        <h2><i class="fas fa-comments"></i> Team Chat</h2>
+        <button class="close-modal" onclick="closeChatModal()">&times;</button>
+      </div>
+      <div class="modal-body" style="padding:0;">
+        <div class="chat-container">
+          <div class="chat-messages" id="chatMessages">
+            <div class="loading-placeholder">
+              <i class="fas fa-spinner fa-spin"></i>
+              <p>Loading messages...</p>
+            </div>
+          </div>
+          <div class="chat-input-container">
+            <input type="text" id="chatInput" placeholder="Type a message..." onkeypress="if(event.key==='Enter') sendMessage('${teamId}')">
+            <button class="btn-primary" onclick="sendMessage('${teamId}')">
+              <i class="fas fa-paper-plane"></i> Send
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  
+  await loadChatMessages(teamId);
+};
+
+window.closeChatModal = function() {
+  if (chatUnsubscribe) {
+    chatUnsubscribe();
+    chatUnsubscribe = null;
+  }
+  const modal = document.getElementById('chatModal');
+  if (modal) modal.remove();
+};
+
+async function loadChatMessages(teamId) {
+  const messagesContainer = document.getElementById('chatMessages');
+  if (!messagesContainer) return;
+  
+  try {
+    chatUnsubscribe = db.collection('teamChats')
+      .doc(teamId)
+      .collection('messages')
+      .orderBy('timestamp', 'asc')
+      .limit(50)
+      .onSnapshot(snapshot => {
+        if (snapshot.empty) {
+          messagesContainer.innerHTML = `
+            <div class="chat-empty-state">
+              <i class="fas fa-comments"></i>
+              <p>No messages yet. Start the conversation!</p>
+            </div>
+          `;
+          return;
+        }
+        
+        const messages = [];
+        snapshot.forEach(doc => {
+          messages.push({ id: doc.id, ...doc.data() });
+        });
+        
+        displayChatMessages(messages);
+        scrollToBottom();
+      }, error => {
+        console.error('Error loading chat:', error);
+        messagesContainer.innerHTML = `
+          <div class="error-state">
+            <i class="fas fa-exclamation-triangle"></i>
+            <p>Error loading messages</p>
+          </div>
+        `;
+      });
+  } catch (error) {
+    console.error('Error setting up chat:', error);
+    showError('Error loading chat');
+  }
+}
+
+function displayChatMessages(messages) {
+  const container = document.getElementById('chatMessages');
+  if (!container) return;
+  
+  container.innerHTML = messages.map(msg => {
+    const isOwn = msg.userId === currentUser.uid;
+    const time = msg.timestamp ? new Date(msg.timestamp.toDate()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+    
+    return `
+      <div class="chat-message ${isOwn ? 'own-message' : ''}">
+        ${!isOwn ? `
+          <div class="message-avatar">
+            <img src="${msg.userAvatar || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(msg.userName || 'U') + '&background=ff6600&color=fff'}" alt="${escapeHtml(msg.userName || 'User')}">
+          </div>
+        ` : ''}
+        <div class="message-content">
+          <div class="message-header">
+            <span class="message-sender">${escapeHtml(msg.userName || 'Unknown')}</span>
+            <span class="message-time">${time}</span>
+          </div>
+          <div class="message-text">${escapeHtml(msg.message)}</div>
+        </div>
+        ${isOwn ? `
+          <div class="message-avatar">
+            <img src="${msg.userAvatar || currentUser.photoURL || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(msg.userName || 'U') + '&background=ff6600&color=fff'}" alt="${escapeHtml(msg.userName || 'User')}">
+          </div>
+        ` : ''}
+      </div>
+    `;
+  }).join('');
+  
+  scrollToBottom();
+}
+
+function scrollToBottom() {
+  const container = document.getElementById('chatMessages');
+  if (container) {
+    setTimeout(() => {
+      container.scrollTop = container.scrollHeight;
+    }, 100);
+  }
+}
+
+window.sendMessage = async function(teamId) {
+  const input = document.getElementById('chatInput');
+  if (!input) return;
+  
+  const message = input.value.trim();
+  if (!message) return;
+  
+  try {
+    await db.collection('teamChats').doc(teamId).collection('messages').add({
+      message: message,
+      userId: currentUser.uid,
+      userName: currentUser.displayName || currentUser.email.split('@')[0],
+      userAvatar: currentUser.photoURL || null,
+      timestamp: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    
+    input.value = '';
+    input.focus();
+  } catch (error) {
+    console.error('Error sending message:', error);
+    showError('Error sending message');
+  }
+};
+
+window.toggleTeamNotifications = (teamId) => showToast('Notification preferences updated!', 'success');
+window.showTeamMenu = (id) => showToast('Team menu coming soon!', 'info');

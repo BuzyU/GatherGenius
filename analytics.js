@@ -1188,3 +1188,550 @@ window.addEventListener('beforeunload', () => {
         }
     });
 });
+// ========================================
+// IMPROVED ANALYTICS SYSTEM - COMPLETE VERSION
+// Add this to the END of your analytics.js file (after all existing code)
+// ========================================
+
+// ========================================
+// LOADING OVERLAY FUNCTIONS
+// ========================================
+function showLoadingOverlay() {
+    let overlay = document.querySelector('.loading-overlay');
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.className = 'loading-overlay';
+        overlay.innerHTML = `
+            <div class="loading-spinner-container">
+                <div class="loading-spinner"></div>
+                <p>Loading analytics...</p>
+            </div>
+        `;
+        overlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        `;
+        document.body.appendChild(overlay);
+    }
+    
+    // Force reflow
+    overlay.offsetHeight;
+    overlay.style.opacity = '1';
+}
+
+function hideLoadingOverlay() {
+    const overlay = document.querySelector('.loading-overlay');
+    if (overlay) {
+        overlay.style.opacity = '0';
+        setTimeout(() => {
+            if (overlay.parentNode) {
+                overlay.remove();
+            }
+        }, 300);
+    }
+}
+
+// ========================================
+// ENHANCED STATE MANAGEMENT
+// ========================================
+const analyticsState = {
+    currentUser: null,
+    allEvents: [],
+    filteredEvents: [],
+    charts: {},
+    timeFilter: 30,
+    searchQuery: '',
+    categoryFilter: 'all',
+    eventsUnsubscribe: null,
+    isLoading: false,
+    lastFetchTime: null,
+    cacheTimeout: 5 * 60 * 1000, // 5 minutes
+    useRealtime: true
+};
+
+// ========================================
+// REPLACE EXISTING loadAnalyticsData FUNCTION
+// ========================================
+async function loadAnalyticsDataImproved() {
+    if (analyticsState.isLoading) {
+        console.log('⏳ Already loading, skipping...');
+        return;
+    }
+
+    try {
+        analyticsState.isLoading = true;
+        analyticsState.currentUser = state.currentUser || auth.currentUser;
+        
+        if (!analyticsState.currentUser) {
+            console.warn('⚠️ No user found');
+            return;
+        }
+
+        showLoadingOverlay();
+        showLoadingState();
+
+        // Check cache
+        const cacheKey = `analytics_${analyticsState.currentUser.uid}_${state.timeFilter}`;
+        const cacheTimeKey = `${cacheKey}_time`;
+        const cachedData = sessionStorage.getItem(cacheKey);
+        const cacheTime = sessionStorage.getItem(cacheTimeKey);
+        const now = Date.now();
+
+        // Use cache if valid
+        if (cachedData && cacheTime && (now - parseInt(cacheTime)) < analyticsState.cacheTimeout) {
+            console.log('📦 Using cached analytics data');
+            state.allEvents = JSON.parse(cachedData);
+            applyFilters();
+            hideLoadingOverlay();
+            analyticsState.isLoading = false;
+            return;
+        }
+
+        console.log('🔄 Fetching fresh analytics data...');
+
+        // Build query with proper error handling
+        let eventsQuery;
+        const uid = analyticsState.currentUser.uid;
+        
+        try {
+            // Try createdBy first
+            eventsQuery = db.collection('events')
+                .where('createdBy', '==', uid);
+            
+            console.log('Using createdBy index');
+        } catch (error) {
+            console.warn('createdBy query failed, trying organizerId:', error);
+            
+            try {
+                // Fallback to organizerId
+                eventsQuery = db.collection('events')
+                    .where('organizerId', '==', uid);
+                
+                console.log('Using organizerId index');
+            } catch (fallbackError) {
+                console.error('Both queries failed:', fallbackError);
+                throw new Error('Unable to query events. Please check Firebase indexes.');
+            }
+        }
+
+        // Apply time filter if not "all time"
+        if (state.timeFilter > 0) {
+            const filterDate = new Date();
+            filterDate.setDate(filterDate.getDate() - state.timeFilter);
+            eventsQuery = eventsQuery.where('createdAt', '>=', filterDate);
+        }
+
+        // Add ordering and limit
+        eventsQuery = eventsQuery.orderBy('createdAt', 'desc');
+        
+        // Mobile optimization
+        const isMobile = window.innerWidth <= 768;
+        const fetchLimit = isMobile ? 50 : 100;
+        eventsQuery = eventsQuery.limit(fetchLimit);
+
+        // Execute query
+        const eventsSnapshot = await eventsQuery.get();
+        console.log(`✅ Loaded ${eventsSnapshot.size} events`);
+
+        // Process events
+        state.allEvents = [];
+        eventsSnapshot.forEach(doc => {
+            const data = doc.data();
+            state.allEvents.push({ 
+                id: doc.id, 
+                ...data,
+                // Normalize dates
+                createdAt: data.createdAt?.toDate?.() || new Date(data.createdAt),
+                eventDate: data.eventDate?.toDate?.() || data.date?.toDate?.() || new Date(data.eventDate || data.date)
+            });
+        });
+
+        // Sort by date
+        state.allEvents = utils.sortEventsByDate(state.allEvents, true);
+
+        // Cache the data
+        try {
+            sessionStorage.setItem(cacheKey, JSON.stringify(state.allEvents));
+            sessionStorage.setItem(cacheTimeKey, now.toString());
+            console.log('💾 Data cached successfully');
+        } catch (cacheError) {
+            console.warn('Cache storage failed:', cacheError);
+            clearOldCache();
+        }
+
+        applyFilters();
+        analyticsState.lastFetchTime = now;
+
+    } catch (error) {
+        console.error('❌ Error loading analytics:', error);
+        
+        // Specific error messages
+        if (error.code === 'failed-precondition') {
+            utils.showToast('Firebase indexes are missing. Please create required indexes.', 'error');
+        } else if (error.code === 'permission-denied') {
+            utils.showToast('Permission denied. Please check your Firebase security rules.', 'error');
+        } else {
+            utils.showToast('Error loading analytics: ' + error.message, 'error');
+        }
+        
+        showErrorState();
+    } finally {
+        hideLoadingOverlay();
+        analyticsState.isLoading = false;
+    }
+}
+
+// ========================================
+// REPLACE EXISTING setupRealtimeUpdates FUNCTION
+// ========================================
+function setupRealtimeUpdatesImproved() {
+    if (!state.currentUser) return;
+
+    // Unsubscribe from previous listener
+    if (state.eventsUnsubscribe) {
+        state.eventsUnsubscribe();
+    }
+
+    console.log('🔔 Setting up real-time updates...');
+
+    try {
+        let eventsQuery = db.collection('events')
+            .where('createdBy', '==', state.currentUser.uid);
+        
+        // Apply time filter
+        if (state.timeFilter > 0) {
+            const filterDate = new Date();
+            filterDate.setDate(filterDate.getDate() - state.timeFilter);
+            eventsQuery = eventsQuery.where('createdAt', '>=', filterDate);
+        }
+        
+        eventsQuery = eventsQuery.orderBy('createdAt', 'desc').limit(100);
+        
+        state.eventsUnsubscribe = eventsQuery.onSnapshot(
+            (snapshot) => {
+                console.log(`🔄 Real-time update: ${snapshot.size} events`);
+                
+                const newEvents = [];
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    newEvents.push({ 
+                        id: doc.id, 
+                        ...data,
+                        createdAt: data.createdAt?.toDate?.() || new Date(data.createdAt),
+                        eventDate: data.eventDate?.toDate?.() || data.date?.toDate?.() || new Date(data.eventDate || data.date)
+                    });
+                });
+                
+                state.allEvents = utils.sortEventsByDate(newEvents, true);
+                
+                // Update cache
+                const cacheKey = `analytics_${state.currentUser.uid}_${state.timeFilter}`;
+                try {
+                    sessionStorage.setItem(cacheKey, JSON.stringify(state.allEvents));
+                    sessionStorage.setItem(`${cacheKey}_time`, Date.now().toString());
+                } catch (e) {
+                    console.warn('Cache update failed:', e);
+                }
+                
+                applyFilters();
+                showUpdateNotification();
+            },
+            (error) => {
+                console.error('Real-time listener error:', error);
+                if (error.code === 'permission-denied') {
+                    console.warn('Real-time updates disabled due to permissions');
+                    analyticsState.useRealtime = false;
+                }
+            }
+        );
+    } catch (error) {
+        console.error('Failed to setup real-time updates:', error);
+    }
+}
+
+// ========================================
+// UTILITY FUNCTIONS
+// ========================================
+function clearOldCache() {
+    try {
+        const keys = Object.keys(sessionStorage);
+        const analyticsKeys = keys.filter(k => k.startsWith('analytics_'));
+        
+        if (analyticsKeys.length > 6) {
+            const sortedKeys = analyticsKeys
+                .filter(k => k.includes('_time'))
+                .map(k => ({
+                    key: k,
+                    time: parseInt(sessionStorage.getItem(k) || '0')
+                }))
+                .sort((a, b) => b.time - a.time);
+            
+            sortedKeys.slice(3).forEach(item => {
+                const dataKey = item.key.replace('_time', '');
+                sessionStorage.removeItem(dataKey);
+                sessionStorage.removeItem(item.key);
+            });
+        }
+    } catch (error) {
+        console.warn('Error clearing cache:', error);
+    }
+}
+
+function showUpdateNotification() {
+    const notification = document.createElement('div');
+    notification.className = 'update-notification';
+    notification.innerHTML = '<i class="fas fa-sync-alt"></i> Data updated';
+    notification.style.cssText = `
+        position: fixed;
+        top: 80px;
+        right: 20px;
+        background: #28a745;
+        color: white;
+        padding: 10px 20px;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        z-index: 10000;
+        font-size: 14px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        opacity: 0;
+        transform: translateY(-20px);
+        transition: all 0.3s ease;
+    `;
+    
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+        notification.style.opacity = '1';
+        notification.style.transform = 'translateY(0)';
+    }, 10);
+    
+    setTimeout(() => {
+        notification.style.opacity = '0';
+        notification.style.transform = 'translateY(-20px)';
+        setTimeout(() => notification.remove(), 300);
+    }, 2000);
+}
+
+// ========================================
+// REPLACE EXISTING FUNCTIONS
+// ========================================
+
+// Store original function
+const originalLoadAnalyticsData = typeof loadAnalyticsData !== 'undefined' ? loadAnalyticsData : null;
+const originalSetupRealtimeUpdates = typeof setupRealtimeUpdates !== 'undefined' ? setupRealtimeUpdates : null;
+
+// Replace with improved versions
+loadAnalyticsData = loadAnalyticsDataImproved;
+setupRealtimeUpdates = setupRealtimeUpdatesImproved;
+
+// ========================================
+// MANUAL REFRESH FUNCTION
+// ========================================
+window.refreshAnalytics = async function() {
+    const btn = document.querySelector('.refresh-btn');
+    if (btn) {
+        btn.classList.add('refreshing');
+        btn.disabled = true;
+    }
+
+    console.log('🔄 Manual refresh triggered');
+
+    // Clear cache
+    const cacheKey = `analytics_${state.currentUser.uid}_${state.timeFilter}`;
+    sessionStorage.removeItem(cacheKey);
+    sessionStorage.removeItem(`${cacheKey}_time`);
+
+    await loadAnalyticsData();
+
+    if (btn) {
+        setTimeout(() => {
+            btn.classList.remove('refreshing');
+            btn.disabled = false;
+        }, 1000);
+    }
+
+    utils.showToast('Analytics data refreshed', 'success');
+};
+
+// ========================================
+// UPDATE TIME FILTER FUNCTION
+// ========================================
+const originalApplyTimeFilter = window.applyTimeFilter;
+window.applyTimeFilter = async function() {
+    const filterSelect = document.getElementById('timeFilter');
+    const newFilter = parseInt(filterSelect.value) || 0;
+    
+    if (newFilter !== state.timeFilter) {
+        state.timeFilter = newFilter;
+        console.log(`⏱️ Time filter changed to: ${newFilter === 0 ? 'All time' : `Last ${newFilter} days`}`);
+        
+        // Clear cache for new filter
+        const cacheKey = `analytics_${state.currentUser.uid}_${newFilter}`;
+        sessionStorage.removeItem(cacheKey);
+        sessionStorage.removeItem(`${cacheKey}_time`);
+        
+        await loadAnalyticsData();
+        
+        // Update real-time listener
+        if (analyticsState.useRealtime) {
+            setupRealtimeUpdates();
+        }
+    }
+};
+
+// ========================================
+// ONLINE/OFFLINE HANDLERS
+// ========================================
+window.addEventListener('online', () => {
+    console.log('✅ Connection restored');
+    utils.showToast('Connection restored. Refreshing data...', 'info');
+    loadAnalyticsData();
+});
+
+window.addEventListener('offline', () => {
+    console.log('⚠️ Connection lost');
+    utils.showToast('You are offline. Showing cached data.', 'warning');
+});
+
+// ========================================
+// ENHANCED CLEANUP
+// ========================================
+window.addEventListener('beforeunload', () => {
+    if (state.eventsUnsubscribe) {
+        state.eventsUnsubscribe();
+    }
+    
+    Object.values(state.charts).forEach(chart => {
+        if (chart && typeof chart.destroy === 'function') {
+            try {
+                chart.destroy();
+            } catch (e) {
+                console.warn('Error destroying chart:', e);
+            }
+        }
+    });
+    
+    clearOldCache();
+});
+
+// ========================================
+// ADD MISSING CSS STYLES
+// ========================================
+function injectAnalyticsStyles() {
+    if (document.getElementById('analytics-enhanced-styles')) return;
+    
+    const style = document.createElement('style');
+    style.id = 'analytics-enhanced-styles';
+    style.textContent = `
+        .loading-spinner-container {
+            text-align: center;
+            color: white;
+        }
+        
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top-color: #ff6600;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 20px;
+        }
+        
+        .loading-spinner-container p {
+            font-size: 16px;
+            margin: 0;
+        }
+        
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        
+        .refresh-btn {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 16px;
+            background: #6c757d;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+        
+        .refresh-btn:hover:not(.refreshing) {
+            background: #5a6268;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        
+        .refresh-btn:active {
+            transform: translateY(0);
+        }
+        
+        .refresh-btn.refreshing {
+            pointer-events: none;
+            opacity: 0.7;
+        }
+        
+        .refresh-btn.refreshing i {
+            animation: spin 1s linear infinite;
+        }
+        
+        .update-notification {
+            animation: slideInRight 0.3s ease;
+        }
+        
+        @keyframes slideInRight {
+            from {
+                opacity: 0;
+                transform: translateX(100px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .refresh-btn .btn-text {
+                display: none;
+            }
+            
+            .refresh-btn {
+                padding: 10px 12px;
+            }
+            
+            .update-notification {
+                top: 60px;
+                right: 10px;
+                font-size: 13px;
+                padding: 8px 16px;
+            }
+        }
+    `;
+    
+    document.head.appendChild(style);
+}
+
+// Inject styles on load
+injectAnalyticsStyles();
+
+console.log('✅ Improved Analytics System Loaded (Complete)');
+console.log('📊 Features: Optimized queries, caching, real-time updates, mobile optimization');
+console.log('💡 Use: refreshAnalytics() to manually refresh data');
